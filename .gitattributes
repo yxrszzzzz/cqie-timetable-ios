@@ -2,3 +2,6 @@
 # 这台机器上 core.autocrlf=true，一不小心就会把 .yml/.sh 换成 CRLF，
 # 而 macOS 上带 \r 的 shell 脚本会直接报 "command not found"。
 * text=auto eol=lf
+
+# 图标是二进制，别让 git 去猜它是不是文本
+*.png binary

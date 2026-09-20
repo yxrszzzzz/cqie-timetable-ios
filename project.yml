@@ -38,3 +38,5 @@ targets:
         ONLY_ACTIVE_ARCH: "NO"
         TARGETED_DEVICE_FAMILY: "1"
         ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+        # 图标取自 Assets.xcassets/AppIcon.appiconset
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
