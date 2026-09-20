@@ -29,26 +29,36 @@ final class AppViewModel: ObservableObject {
         if let saved = auth.rememberedAccount, !saved.isEmpty {
             account = saved
         }
-        // 上次登录过就直接续用，token 7 天内有效
-        guard let session = auth.restore() else { return }
-        loggedIn = true
-        studentName = session.studentName
+        let cached = TimetableStore.load()
+        let restored = auth.restore()
 
-        // 先把本机缓存摆出来：冷启动不用干等网络，断网也看得到课表
-        if let cached = TimetableStore.load() {
+        // 先把本机缓存摆出来：冷启动不用干等网络，断网和「导入的课表」也看得到
+        if let cached {
             data = cached
             week = cached.currentWeek
-            let name = session.studentName.isEmpty ? session.studentId : session.studentName
-            summary = "\(name) · \(cached.session.displayName) · \(cached.courses.count) 门课"
+            let name = restored?.studentName ?? TimetableStore.lastStudentName ?? ""
+            summary = name.isEmpty
+                ? "\(cached.session.displayName) · \(cached.courses.count) 门课"
+                : "\(name) · \(cached.session.displayName) · \(cached.courses.count) 门课"
             statusText = "已显示本机缓存的课表，正在刷新…"
-            // 先把提醒窗口按缓存续上，万一这次刷新失败也不至于断档
+            // 提醒窗口按缓存先续上，万一这次刷新失败也不至于断档
             Task { await ClassReminder.reschedule(cached) }
-        } else {
-            statusText = "已恢复登录（\(session.studentName)），正在拉取课表…"
+        }
+
+        // 没有登录态就停在这：有缓存（导入的课表）就显示缓存，没有就等用户登录
+        guard let restored else {
+            if cached == nil { statusText = "填入学号和密码，登录后自动拉取课表" }
+            return
+        }
+
+        loggedIn = true
+        studentName = restored.studentName
+        if cached == nil {
+            statusText = "已恢复登录（\(restored.studentName)），正在拉取课表…"
         }
 
         busy = true
-        Task { await loadTimetable(studentId: session.studentId) }
+        Task { await loadTimetable(studentId: restored.studentId) }
     }
 
     // MARK: - 登录
@@ -201,6 +211,17 @@ final class AppViewModel: ObservableObject {
     /// 界面自己发起的操作出错时，借状态栏说一声
     func report(_ message: String) {
         statusText = message
+    }
+
+    /// 导入官网导出的课表：直接替换当前显示的课表。
+    /// 导入的课表不需要登录态，所以没登录也能用
+    func applyImported(_ imported: TimetableData) {
+        data = imported
+        week = imported.currentWeek
+        studentName = ""
+        summary = "导入课表 · \(imported.courses.count) 门课"
+        statusText = "已导入课表，数据只存在本机"
+        Task { await ClassReminder.reschedule(imported) }
     }
 }
 

@@ -102,6 +102,11 @@ enum DateUtil {
         return dayFormatter.date(from: text)
     }
 
+    /// 与 parseDay 对称，转回 "yyyy-MM-dd"
+    static func formatDay(_ date: Date) -> String {
+        dayFormatter.string(from: date)
+    }
+
     static func days(from start: Date, to end: Date) -> Int {
         calendar.dateComponents([.day], from: start, to: end).day ?? 0
     }

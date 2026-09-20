@@ -7,9 +7,9 @@ struct ContentView: View {
     @StateObject private var model = AppViewModel()
     @Environment(\.scenePhase) private var scenePhase
 
-    @State private var share: SharePayload?
-    @State private var showQuery = false
-    @State private var showReminder = false
+    /// 分享、提醒、查询、导入共用一个 sheet 位——同一个视图上挂多个 sheet
+    /// 在 SwiftUI 里并不总是都生效，统一成一个入口最稳
+    @State private var activeSheet: ActiveSheet?
 
     var body: some View {
         NavigationStack {
@@ -31,22 +31,23 @@ struct ContentView: View {
                 }
                 .padding()
             }
-            // 查询页单独挂一层，避免和分享用的 sheet 挤在同一个视图上
-            .sheet(isPresented: $showQuery) {
-                NavigationStack {
-                    CourseQueryView(api: model.api, auth: model.auth) { showQuery = false }
-                }
-            }
             .navigationTitle("重工课表")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if model.loggedIn {
+                    // 导入的课表没有登录态，但提醒、导出这些照样该能用
+                    if model.loggedIn || model.data != nil {
                         Menu {
-                            Button("课表查询", systemImage: "magnifyingglass") { showQuery = true }
-                            Button("上课提醒", systemImage: "bell") { showReminder = true }
-                            Button("重新登录") { model.relogin() }
-                            Button("退出登录", role: .destructive) { model.logout() }
+                            Button("上课提醒", systemImage: "bell") { activeSheet = .reminder }
+                            Button("导入课表", systemImage: "square.and.arrow.down") {
+                                activeSheet = .importTimetable
+                            }
+                            if model.loggedIn {
+                                Button("课表查询", systemImage: "magnifyingglass") { activeSheet = .query }
+                                Divider()
+                                Button("重新登录") { model.relogin() }
+                                Button("退出登录", role: .destructive) { model.logout() }
+                            }
                         } label: {
                             Image(systemName: "ellipsis.circle")
                         }
@@ -54,11 +55,19 @@ struct ContentView: View {
                 }
             }
         }
-        .sheet(item: $share) { payload in
-            ShareSheet(url: payload.url)
-        }
-        .sheet(isPresented: $showReminder) {
-            ReminderSheet(model: model)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .share(let url):
+                ShareSheet(url: url)
+            case .reminder:
+                ReminderSheet(model: model)
+            case .importTimetable:
+                ImportView { model.applyImported($0) }
+            case .query:
+                NavigationStack {
+                    CourseQueryView(api: model.api, auth: model.auth) { activeSheet = nil }
+                }
+            }
         }
         .onChange(of: scenePhase) { phase in
             // 提醒只排未来一周，回到前台时把窗口往前续一次
@@ -114,6 +123,20 @@ struct ContentView: View {
             Text("账号密码只用于学校自己的登录页面，不保存在本机。")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+
+            Divider().padding(.vertical, 2)
+
+            Button {
+                activeSheet = .importTimetable
+            } label: {
+                Label("导入官网导出的 Excel", systemImage: "square.and.arrow.down")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+
+            Text("不想登录也行：在教务系统里导出课表后导入，课表只存在本机。")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -145,7 +168,7 @@ struct ContentView: View {
                 week: model.week,
                 studentName: model.studentName
             )
-            share = SharePayload(url: url)
+            activeSheet = .share(url)
         } catch {
             model.report("导出失败：\(error.localizedDescription)")
         }
@@ -180,10 +203,21 @@ struct ContentView: View {
     }
 }
 
-/// 分享面板要跟着一个具体文件走，包一层拿到 identity
-private struct SharePayload: Identifiable {
-    let id = UUID()
-    let url: URL
+/// 分享、提醒、查询、导入共用一个 sheet 位
+private enum ActiveSheet: Identifiable {
+    case share(URL)
+    case reminder
+    case importTimetable
+    case query
+
+    var id: String {
+        switch self {
+        case .share(let url): return "share-\(url.absoluteString)"
+        case .reminder: return "reminder"
+        case .importTimetable: return "import"
+        case .query: return "query"
+        }
+    }
 }
 
 /// 系统分享面板（自带「存储到文件」和「打印」）
