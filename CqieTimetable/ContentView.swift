@@ -1,9 +1,11 @@
 import SwiftUI
+import UIKit
 
 /// Stage 2：课表网格。登录拿 token → 拉课表 → 画周视图。
 struct ContentView: View {
 
     @StateObject private var model = AppViewModel()
+    @State private var share: SharePayload?
 
     var body: some View {
         NavigationStack {
@@ -39,6 +41,9 @@ struct ContentView: View {
                     }
                 }
             }
+        }
+        .sheet(item: $share) { payload in
+            ShareSheet(url: payload.url)
         }
     }
 
@@ -94,11 +99,35 @@ struct ContentView: View {
 
     private var loadedSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(model.summary)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(model.summary)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    exportXlsx()
+                } label: {
+                    Label("导出", systemImage: "square.and.arrow.up")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+            }
             TimetableScreen(model: model)
+        }
+    }
+
+    /// 导出当前这一周的课表，交给系统分享面板——面板里可以存到文件、发给别人、打印
+    private func exportXlsx() {
+        guard let data = model.data else { return }
+        do {
+            let url = try TimetableExport.makeXlsx(
+                data,
+                week: model.week,
+                studentName: model.studentName
+            )
+            share = SharePayload(url: url)
+        } catch {
+            model.report("导出失败：\(error.localizedDescription)")
         }
     }
 
@@ -129,4 +158,21 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 6)
     }
+}
+
+/// 分享面板要跟着一个具体文件走，包一层拿到 identity
+private struct SharePayload: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// 系统分享面板（自带「存储到文件」和「打印」）
+private struct ShareSheet: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }

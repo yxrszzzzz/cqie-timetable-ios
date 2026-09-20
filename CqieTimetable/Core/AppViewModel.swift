@@ -11,6 +11,8 @@ final class AppViewModel: ObservableObject {
     @Published var busy = false
     @Published var loggedIn = false
     @Published var summary = ""
+    /// 当前账号的姓名，导出课表时写进表格抬头
+    @Published var studentName = ""
     /// 课表数据。为空表示还没拉到，界面就停在登录页。
     @Published var data: TimetableData?
     /// 当前查看的周次
@@ -26,6 +28,7 @@ final class AppViewModel: ObservableObject {
         // 上次登录过就直接续用，token 7 天内有效
         guard let session = auth.restore() else { return }
         loggedIn = true
+        studentName = session.studentName
 
         // 先把本机缓存摆出来：冷启动不用干等网络，断网也看得到课表
         if let cached = TimetableStore.load() {
@@ -161,6 +164,7 @@ final class AppViewModel: ObservableObject {
             TimetableStore.lastStudentName = user?.name
 
             let name = user?.name ?? auth.current?.studentName ?? ""
+            studentName = name
             summary = "\(name) · \(session.displayName) · \(built.courses.count) 门课"
             statusText = "课表已加载"
         } catch {
@@ -181,6 +185,11 @@ final class AppViewModel: ObservableObject {
     func reload() {
         guard let current = auth.current else { return }
         Task { await loadTimetable(studentId: current.studentId) }
+    }
+
+    /// 界面自己发起的操作出错时，借状态栏说一声
+    func report(_ message: String) {
+        statusText = message
     }
 }
 
