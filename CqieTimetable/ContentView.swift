@@ -15,7 +15,10 @@ struct ContentView: View {
                     }
                     if model.data != nil {
                         loadedSection
-                    } else if !model.loggedIn {
+                    } else if model.loggedIn {
+                        // 已登录但还没拿到课表：正在拉，或者拉失败了等重试
+                        pendingSection
+                    } else {
                         loginSection
                     }
                     versionFooter
@@ -97,6 +100,26 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             TimetableScreen(model: model)
         }
+    }
+
+    /// 已登录但手上一份课表都没有：要么正在拉，要么拉失败了
+    private var pendingSection: some View {
+        VStack(spacing: 10) {
+            if model.busy {
+                ProgressView()
+                Text("正在拉取课表…")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("还没取到课表")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Button("重试") { model.reload() }
+                    .buttonStyle(.bordered)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 
     private var versionFooter: some View {

@@ -24,12 +24,22 @@ final class AppViewModel: ObservableObject {
             account = saved
         }
         // 上次登录过就直接续用，token 7 天内有效
-        if let session = auth.restore() {
-            loggedIn = true
-            busy = true
-            statusText = "已恢复登录（\(session.studentName)），正在刷新课表…"
-            Task { await loadTimetable(studentId: session.studentId) }
+        guard let session = auth.restore() else { return }
+        loggedIn = true
+
+        // 先把本机缓存摆出来：冷启动不用干等网络，断网也看得到课表
+        if let cached = TimetableStore.load() {
+            data = cached
+            week = cached.currentWeek
+            let name = session.studentName.isEmpty ? session.studentId : session.studentName
+            summary = "\(name) · \(cached.session.displayName) · \(cached.courses.count) 门课"
+            statusText = "已显示本机缓存的课表，正在刷新…"
+        } else {
+            statusText = "已恢复登录（\(session.studentName)），正在拉取课表…"
         }
+
+        busy = true
+        Task { await loadTimetable(studentId: session.studentId) }
     }
 
     // MARK: - 登录
@@ -111,6 +121,8 @@ final class AppViewModel: ObservableObject {
 
     func logout() {
         auth.clear()
+        // 课表缓存也一并清掉：课程信息属于个人数据，不该在登出后还留在设备上
+        TimetableStore.clear()
         loggedIn = false
         showLoginWebView = false
         data = nil
@@ -144,16 +156,31 @@ final class AppViewModel: ObservableObject {
             self.data = built
             self.week = built.currentWeek
 
+            // 拉到之后才写缓存：一次失败的响应不该盖掉上一次的好数据
+            TimetableStore.save(session: session, schedule: schedule, periods: periods)
+            TimetableStore.lastStudentName = user?.name
+
             let name = user?.name ?? auth.current?.studentName ?? ""
             summary = "\(name) · \(session.displayName) · \(built.courses.count) 门课"
             statusText = "课表已加载"
         } catch {
-            statusText = describe(error)
+            // 手上有缓存时别把已经显示出来的课表抹掉，只说明刷新没成功
+            if data != nil {
+                statusText = "刷新失败：\(describe(error))　下面显示的是本机缓存"
+            } else {
+                statusText = describe(error)
+            }
         }
     }
 
     private func describe(_ error: Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    }
+
+    /// 手动重试。首次拉课表失败时界面上就只剩这个按钮可用
+    func reload() {
+        guard let current = auth.current else { return }
+        Task { await loadTimetable(studentId: current.studentId) }
     }
 }
 

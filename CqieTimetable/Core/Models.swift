@@ -5,9 +5,12 @@ import Foundation
 // 与 Android 端 Dto.kt 一一对应。Swift 的 Codable 不像 Kotlin 那样支持「默认值」，
 // 缺字段就会直接抛错，所以这里一律用可选类型存，再用计算属性给出默认值——
 // 服务端少返回一个字段不该让整个解析失败。
+//
+// 需要落盘的那几个是 Codable 而不是 Decodable：本地缓存存的就是这些原始结构
+// （见 TimetableStore），只解码不编码的话缓存写不回去。
 
 /// POST /api/timetable/class/timetable/stu/schedule-detail?sessionId=xxx
-struct ScheduleData: Decodable {
+struct ScheduleData: Codable {
     var classTimetableVOList: [ClassTimetableItem]?
     var maxSection: Int?
 
@@ -16,7 +19,7 @@ struct ScheduleData: Decodable {
 }
 
 /// 课表条目：服务端返回约 150 个字段，这里只保留用得上的
-struct ClassTimetableItem: Decodable {
+struct ClassTimetableItem: Codable {
     var id: String?
     var teachingWeek: String?
     var weekDay: String?
@@ -56,7 +59,7 @@ struct SessionListData: Decodable {
     var sessions: [SessionItem] { sessionVOList ?? [] }
 }
 
-struct SessionItem: Decodable, Identifiable {
+struct SessionItem: Codable, Identifiable {
     var id: String
     var year: String?
     var term: String?
@@ -77,14 +80,14 @@ struct TimePatternData: Decodable {
     var periods: [PeriodItem] { periodList ?? [] }
 }
 
-struct PeriodItem: Decodable {
+struct PeriodItem: Codable {
     var smallPeriod: Int?
     var startTime: String?
     var endTime: String?
 }
 
 /// 组班的一项。stuNums 实测是数字，但服务端字段类型不稳定，用 Double 兜住再取整。
-struct TeachingObject: Decodable {
+struct TeachingObject: Codable {
     var className: String?
     var stuNums: Double?
 
