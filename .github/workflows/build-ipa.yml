@@ -1,0 +1,72 @@
+name: 构建未签名 IPA
+
+# 这个工作流的作用：用 GitHub 免费的 macOS 机器把 iOS 工程编译出来，
+# 产出一个「未签名」的 ipa。你在 Windows 上把它下载下来，用爱思助手签名后装到手机。
+# 之所以不签名：签名需要你的 Apple 证书，证书不应该放在 GitHub 上。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    # 用 macos-latest 而不是写死 macos-15：写死的标签被弃用后任务会直接失败
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 取代码
+        uses: actions/checkout@v4
+
+      - name: 看看构建机器的 Xcode 版本
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 从 project.yml 生成 Xcode 工程
+        run: xcodegen generate
+
+      - name: 编译（不签名）
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project CqieTimetable.xcodeproj \
+            -scheme CqieTimetable \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
+      - name: 打包成 ipa
+        run: |
+          APP_PATH="build/Build/Products/Release-iphoneos/CqieTimetable.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "没找到编译产物 $APP_PATH"
+            find build/Build/Products -maxdepth 3 -name "*.app" -print
+            exit 1
+          fi
+          rm -rf Payload CqieTimetable-unsigned.ipa
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry CqieTimetable-unsigned.ipa Payload
+          echo "包大小："
+          ls -lh CqieTimetable-unsigned.ipa
+          echo "包内容："
+          unzip -l CqieTimetable-unsigned.ipa | head -20
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: CqieTimetable-unsigned-ipa
+          path: CqieTimetable-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30

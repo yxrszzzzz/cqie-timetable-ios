@@ -1,0 +1,40 @@
+# XcodeGen 规格：从这个文件生成 CqieTimetable.xcodeproj
+# 为什么不用手写 .xcodeproj：pbxproj 里全是 UUID 和成对的分区，手写出错概率很高，
+# 而且在 Windows 上没法验证。YAML 规格简单、可读、CI 里一行命令就能生成。
+name: CqieTimetable
+
+options:
+  bundleIdPrefix: com.tcd
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    # 打样阶段不签名：CI 产出未签名 ipa，由爱思助手用你的 Apple ID 重新签名装机
+    CODE_SIGN_IDENTITY: ""
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGN_ENTITLEMENTS: ""
+
+targets:
+  CqieTimetable:
+    type: application
+    platform: iOS
+    sources:
+      - path: CqieTimetable
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tcd.cqietable.ios
+        PRODUCT_NAME: CqieTimetable
+        INFOPLIST_FILE: CqieTimetable/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        # 只出真机架构，CI 上不编 x86_64，省时间
+        ARCHS: arm64
+        ONLY_ACTIVE_ARCH: "NO"
+        TARGETED_DEVICE_FAMILY: "1"
+        ENABLE_USER_SCRIPT_SANDBOXING: "NO"

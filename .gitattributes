@@ -1,0 +1,4 @@
+# 强制文本文件在仓库里一律用 LF。
+# 这台机器上 core.autocrlf=true，一不小心就会把 .yml/.sh 换成 CRLF，
+# 而 macOS 上带 \r 的 shell 脚本会直接报 "command not found"。
+* text=auto eol=lf
