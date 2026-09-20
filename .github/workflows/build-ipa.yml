@@ -54,7 +54,25 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=NO \
-            build
+            build 2>&1 | tee build.log
+
+      # 编译失败时把错误捞出来。
+      # GitHub 的 job 日志要用 API 下载得有 admin 权限，但 annotations 不用，
+      # 所以把 error 行转成 annotation——否则在 Windows 上只能靠人工看网页。
+      - name: 编译失败时导出错误
+        if: failure()
+        run: |
+          if [ ! -f build.log ]; then
+            echo "::error::没有拿到 build.log，编译可能还没开始就挂了"
+            exit 0
+          fi
+          echo "=========== 错误行 ==========="
+          grep -n "error:" build.log | head -60 || true
+          echo "=========== 日志尾部 ==========="
+          tail -n 60 build.log
+          grep "error:" build.log | head -50 | while IFS= read -r line; do
+            echo "::error::$line"
+          done
 
       - name: 打包成 ipa
         run: |
