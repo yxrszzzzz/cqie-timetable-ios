@@ -6,6 +6,7 @@ struct ContentView: View {
 
     @StateObject private var model = AppViewModel()
     @State private var share: SharePayload?
+    @State private var showQuery = false
 
     var body: some View {
         NavigationStack {
@@ -27,12 +28,19 @@ struct ContentView: View {
                 }
                 .padding()
             }
+            // 查询页单独挂一层，避免和分享用的 sheet 挤在同一个视图上
+            .sheet(isPresented: $showQuery) {
+                NavigationStack {
+                    CourseQueryView(api: model.api, auth: model.auth) { showQuery = false }
+                }
+            }
             .navigationTitle("重工课表")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if model.loggedIn {
                         Menu {
+                            Button("课表查询", systemImage: "magnifyingglass") { showQuery = true }
                             Button("重新登录") { model.relogin() }
                             Button("退出登录", role: .destructive) { model.logout() }
                         } label: {

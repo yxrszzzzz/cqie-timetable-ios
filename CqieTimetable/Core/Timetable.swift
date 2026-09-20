@@ -140,6 +140,8 @@ struct Course: Identifiable, Hashable {
     var classes: [ClassGroupInfo]
     var students: String
     var isWholeWeek: Bool
+    /// 查询他人课表时，这条课属于哪几个被查询对象（如「刘庆」「刘生徽」）；自己课表里为空
+    var owners: [String] = []
 
     /// 没排教室的按网课处理（学校自己的约定）
     var isOnline: Bool { room.isEmpty && roomLabel.isEmpty }
@@ -215,6 +217,20 @@ struct TimetableData {
         courses.filter { !$0.isWholeWeek && $0.weekDay == nil && $0.weeks.contains(week) }
     }
 
+    /// 查询多人时出现过的全部被查询对象，结果页按它做筛选条
+    var owners: [String] {
+        var seen = Set<String>()
+        return courses.flatMap { $0.owners }.filter { seen.insert($0).inserted }
+    }
+
+    /// 只看某个人的课；owner 为 nil 表示不筛选
+    func filteredBy(owner: String?) -> TimetableData {
+        guard let owner else { return self }
+        var copy = self
+        copy.courses = courses.filter { $0.owners.contains(owner) }
+        return copy
+    }
+
     var weekDayText: String {
         switch currentWeek {
         case 1: return "第 1 周"
@@ -225,8 +241,13 @@ struct TimetableData {
 
 enum TimetableBuilder {
 
-    static func build(session: SessionItem, schedule: ScheduleData, periods: [PeriodItem]) -> TimetableData {
-        let courses = merge(schedule.items.compactMap(makeCourse))
+    static func build(
+        session: SessionItem,
+        schedule: ScheduleData,
+        periods: [PeriodItem],
+        owner: String = ""
+    ) -> TimetableData {
+        let courses = merge(schedule.items.compactMap { makeCourse($0, owner: owner) })
         let begin = DateUtil.parseDay(session.beginDate)
         let end = DateUtil.parseDay(session.endDate)
         let total = totalWeeks(begin: begin, end: end)
@@ -252,7 +273,7 @@ enum TimetableBuilder {
         return min(days / 7 + 1, total)
     }
 
-    private static func makeCourse(_ item: ClassTimetableItem) -> Course? {
+    private static func makeCourse(_ item: ClassTimetableItem, owner: String) -> Course? {
         guard let name = item.courseName?.trimmingCharacters(in: .whitespaces), !name.isEmpty else {
             return nil
         }
@@ -280,7 +301,8 @@ enum TimetableBuilder {
             reviewWay: item.reviewWay ?? "",
             classes: classes,
             students: item.selectedStuNum ?? "",
-            isWholeWeek: wholeWeek
+            isWholeWeek: wholeWeek,
+            owners: owner.isEmpty ? [] : [owner]
         )
         // 没有星期节次的（整周实训 / 没排时间的网课）一律保留，界面单独列出来。
         // 这里不做丢弃判断——宁可多显示一条，也不能静默丢课。
@@ -320,18 +342,10 @@ enum TimetableBuilder {
         var indexOf: [String: Int] = [:]
 
         for course in courses {
-            let key = [
-                course.name,
-                course.teacher,
-                course.room,
-                course.roomLabel,
-                course.weekDay.map(String.init) ?? "-",
-                course.sections.map(String.init).joined(separator: ","),
-                course.isWholeWeek ? "whole" : "normal",
-            ].joined(separator: "|")
-
+            let key = mergeKey(course)
             if let existing = indexOf[key] {
                 merged[existing].weeks.formUnion(course.weeks)
+                merged[existing].owners = orderedUnion(merged[existing].owners, course.owners)
                 if merged[existing].classes.isEmpty { merged[existing].classes = course.classes }
                 if merged[existing].students.isEmpty { merged[existing].students = course.students }
             } else {
@@ -339,10 +353,82 @@ enum TimetableBuilder {
                 merged.append(course)
             }
         }
-        return merged.sorted { lhs, rhs in
+        return sortCourses(merged)
+    }
+
+    /// 查询多人时的组装。
+    ///
+    /// 不能把几个 id 一次性丢给接口——那样拿不到每个课块属于谁，合并后就分不清
+    /// 哪门课是谁的。所以逐个人查，再按「同课同时间同教室同教师」合起来，
+    /// 把归属记在 `owners` 上。
+    static func buildMerged(
+        session: SessionItem,
+        periods: [PeriodItem],
+        parts: [(owner: String, schedule: ScheduleData)]
+    ) -> TimetableData? {
+        guard let first = parts.first else { return nil }
+        if parts.count == 1 {
+            return build(session: session, schedule: first.schedule, periods: periods, owner: first.owner)
+        }
+
+        var merged: [Course] = []
+        var indexOf: [String: Int] = [:]
+
+        for part in parts {
+            let one = build(session: session, schedule: part.schedule, periods: periods, owner: part.owner)
+            for course in one.courses {
+                let key = mergeKey(course)
+                if let existing = indexOf[key] {
+                    merged[existing].weeks.formUnion(course.weeks)
+                    merged[existing].owners = orderedUnion(merged[existing].owners, course.owners)
+                    if merged[existing].classes.isEmpty { merged[existing].classes = course.classes }
+                    if merged[existing].students.isEmpty { merged[existing].students = course.students }
+                } else {
+                    indexOf[key] = merged.count
+                    merged.append(course)
+                }
+            }
+        }
+
+        let base = build(session: session, schedule: first.schedule, periods: periods, owner: first.owner)
+        return TimetableData(
+            session: base.session,
+            courses: sortCourses(merged),
+            periodTimes: base.periodTimes,
+            maxSection: base.maxSection,
+            totalWeeks: base.totalWeeks,
+            currentWeek: base.currentWeek
+        )
+    }
+
+    /// 同课、同时间、同教室、同教师才算一条
+    private static func mergeKey(_ course: Course) -> String {
+        [
+            course.name,
+            course.teacher,
+            course.room,
+            course.roomLabel,
+            course.weekDay.map(String.init) ?? "-",
+            course.sections.map(String.init).joined(separator: ","),
+            course.isWholeWeek ? "whole" : "normal",
+        ].joined(separator: "|")
+    }
+
+    private static func sortCourses(_ courses: [Course]) -> [Course] {
+        courses.sorted { lhs, rhs in
             if lhs.isWholeWeek != rhs.isWholeWeek { return !lhs.isWholeWeek }
             if (lhs.weekDay ?? 0) != (rhs.weekDay ?? 0) { return (lhs.weekDay ?? 0) < (rhs.weekDay ?? 0) }
             return (lhs.sections.first ?? 0) < (rhs.sections.first ?? 0)
         }
+    }
+
+    /// 保序去重合并
+    private static func orderedUnion(_ lhs: [String], _ rhs: [String]) -> [String] {
+        var seen = Set(lhs)
+        var result = lhs
+        for value in rhs where seen.insert(value).inserted {
+            result.append(value)
+        }
+        return result
     }
 }

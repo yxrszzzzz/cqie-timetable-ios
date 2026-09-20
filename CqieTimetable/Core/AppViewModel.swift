@@ -18,10 +18,14 @@ final class AppViewModel: ObservableObject {
     /// 当前查看的周次
     @Published var week: Int = 1
 
-    private let api = CqieApi()
-    private lazy var auth = AuthRepository(api: api)
+    /// 课表查询那边要复用同一份 api 与登录态，所以不设为 private
+    let api: CqieApi
+    let auth: AuthRepository
 
     init() {
+        let api = CqieApi()
+        self.api = api
+        self.auth = AuthRepository(api: api)
         if let saved = auth.rememberedAccount, !saved.isEmpty {
             account = saved
         }
