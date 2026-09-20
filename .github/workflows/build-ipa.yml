@@ -93,6 +93,13 @@ jobs:
           echo "包内容："
           unzip -l "$IPA_NAME" | head -20
 
+          # 图标缺失只会让 Xcode 发个警告、不会让编译失败，所以在这里点名确认。
+          # 结果转成 annotation 是因为 job 日志要用 API 下载得有 admin 权限。
+          echo "App 里的图标文件："
+          ls -1 "$APP_PATH" | grep -i "AppIcon" || echo "（一个都没有！）"
+          ICON_COUNT=$(ls -1 "$APP_PATH" | grep -ci "AppIcon" || true)
+          echo "::notice::App 内的 AppIcon 文件数：$ICON_COUNT"
+
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
