@@ -110,23 +110,47 @@ struct LoginWebView: UIViewRepresentable {
             self.parent = parent
         }
 
-        // MARK: - 导航开始（相当于 Android 的 onPageStarted）
+        // MARK: - 站点推进
 
-        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-            guard let host = webView.url?.host else { return }
+        /// 三个导航回调都走这一个入口，靠 enteredPortal / eduNotified 防重。
+        ///
+        /// 为什么不能只在 didStartProvisionalNavigation 里判：CAS 提交后是 302
+        /// 重定向链，这个回调只在链路开头来一次，那一刻 webView.url 还是 CAS 登录页，
+        /// 「已经到门户了」这一跳会被整条漏掉——WebView 就此停在门户首页：不跳教务
+        /// 系统、不轮询、拿不到 token，整个流程要等用户手动点一下页面才继续。
+        /// （Android 的 onPageStarted 每一跳都带着新 url，所以那边没这个坑。）
+        private func advance(to host: String?, webView: WKWebView) {
+            guard let host else { return }
 
-            if host == LoginWebView.portalHost, !enteredPortal {
-                // 门户一到就立刻带着 CASTGC 去教务系统换票，
-                // 不等门户页加载完（它页内的 iframe 可能永远加载不完）
+            if host == LoginWebView.portalHost {
+                guard !enteredPortal else { return }
                 enteredPortal = true
                 parent.onEvent(.portalReached)
-                if let url = URL(string: LoginWebView.eduWorkspaceURL) {
+                // 不等门户页加载完（它页内的 iframe 可能永远加载不完）；
+                // 但也不能在导航决策回调里同步 load——那会把当前这跳掐掉，
+                // 扔到下一轮 runloop 再发起
+                Task { @MainActor in
+                    guard let url = URL(string: LoginWebView.eduWorkspaceURL) else { return }
                     webView.load(URLRequest(url: url))
                 }
-            } else if host == LoginWebView.eduHost, !eduNotified {
-                eduNotified = true
-                parent.onEvent(.eduReached)
+            } else if host == LoginWebView.eduHost {
+                if !eduNotified {
+                    eduNotified = true
+                    parent.onEvent(.eduReached)
+                }
+                // 不依赖 didFinish：教务系统是 SPA，只要落在它的域名上就把轮询挂起来，
+                // 轮询自己会等 localStorage 里出现 token
+                Task { @MainActor in self.startPolling(webView) }
             }
+        }
+
+        /// 重定向链走完后 URL 才最终确定，这里是最可靠的时机
+        func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+            advance(to: webView.url?.host, webView: webView)
+        }
+
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            advance(to: webView.url?.host, webView: webView)
         }
 
         // MARK: - 导航完成（DOM 就绪，注入脚本只能等这里）
@@ -140,8 +164,8 @@ struct LoginWebView: UIViewRepresentable {
                 submitted = true
                 parent.onEvent(.casSubmitted)
                 injectCredentials(into: webView)
-            } else if host == LoginWebView.eduHost {
-                startPolling(webView)
+            } else {
+                advance(to: host, webView: webView)
             }
         }
 
