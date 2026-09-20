@@ -40,9 +40,15 @@ final class AppViewModel: ObservableObject {
             return
         }
         auth.rememberedAccount = account
-        showLoginWebView = true
         busy = true
-        statusText = "正在打开学校登录页…"
+        statusText = "正在清理上次的登录状态…"
+        // 必须先清干净学校站点的 cookie / localStorage 再开 WebView：
+        // 否则 CAS 会话还在，服务端会直接认出上一个账号，换号等于没换
+        Task {
+            await SchoolWebSession.clear()
+            statusText = "正在打开学校登录页…"
+            showLoginWebView = true
+        }
     }
 
     func onLoginEvent(_ event: LoginEvent) {
@@ -87,13 +93,20 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    /// 回到登录页换账号。刻意不清 token——万一登录又失败，重启还能接着用原来的
+    /// 回到登录页换账号。
+    ///
+    /// 刻意不清 Keychain 里的 token——万一新账号登录失败，重启 App 还能接着用原来的；
+    /// 但学校站点的 cookie / localStorage 必须清掉，那才是「换账号」真正的开关。
     func relogin() {
         showLoginWebView = false
         data = nil
         loggedIn = false
         summary = ""
-        statusText = "填入学号和密码，登录后自动拉取课表"
+        statusText = "正在清理上次的登录状态…"
+        Task {
+            await SchoolWebSession.clear()
+            statusText = "填入学号和密码，登录后自动拉取课表"
+        }
     }
 
     func logout() {
@@ -102,7 +115,11 @@ final class AppViewModel: ObservableObject {
         showLoginWebView = false
         data = nil
         summary = ""
-        statusText = "已退出登录"
+        statusText = "正在清理登录状态…"
+        Task {
+            await SchoolWebSession.clear()
+            statusText = "已退出登录"
+        }
     }
 
     // MARK: - 拉课表

@@ -17,6 +17,34 @@ enum LoginEvent {
     case failed(String)
 }
 
+/// 学校站点在 WebView 里的登录数据（Cookie / localStorage / 缓存）。
+///
+/// 登录态不止 Keychain 里那一份：CAS 的会话靠 cookie（CASTGC），教务系统的 token
+/// 存在 njw.cqie.edu.cn 的 localStorage 里。这两样都躺在 WKWebView 的持久化存储中，
+/// 只要不删，下次打开登录页服务端会直接认出上一个会话——「换账号」就永远登回旧账号，
+/// 而且轮询会立刻从 localStorage 读到旧 token，WebView 还没加载完就被移出层级。
+enum SchoolWebSession {
+
+    private static let domainSuffix = "cqie.edu.cn"
+
+    /// 清空学校站点的 WebView 数据。
+    /// 必须在创建登录 WebView **之前** await 完，否则 WebView 已经带着旧 cookie 发请求了。
+    static func clear() async {
+        let store = WKWebsiteDataStore.default()
+        let types = WKWebsiteDataStore.allWebsiteDataTypes()
+        let records = await store.dataRecords(ofTypes: types)
+        let targets = records.filter { $0.displayName.contains(domainSuffix) }
+        if !targets.isEmpty {
+            await store.removeData(ofTypes: types, for: targets)
+        }
+        // URLSession 用的是另一份 cookie 存储，顺手一并清掉
+        for cookie in (HTTPCookieStorage.shared.cookies ?? [])
+        where cookie.domain.contains(domainSuffix) {
+            HTTPCookieStorage.shared.deleteCookie(cookie)
+        }
+    }
+}
+
 /// 用隐藏的 WKWebView 跑完学校自己的登录流程：
 /// CAS 自动填充提交 → 门户 → SSO 进新教务系统 → 从 localStorage 取 token。
 ///
@@ -59,6 +87,13 @@ struct LoginWebView: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {
         // 让协调器始终拿到最新的闭包，避免捕获到过期的状态
         context.coordinator.parent = self
+    }
+
+    /// 登录成功后 WebView 会被移出层级。它当时可能还在加载或执行 JS，
+    /// 直接销毁会阻塞主线程（表现就是界面卡住、点一下才动），先停掉再交出去。
+    static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        uiView.navigationDelegate = nil
+        uiView.stopLoading()
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
@@ -115,6 +150,8 @@ struct LoginWebView: UIViewRepresentable {
             didFailProvisionalNavigation navigation: WKNavigation!,
             withError error: Error
         ) {
+            // 主动停加载（例如登录完成后销毁 WebView）会报 -999，不是真的失败
+            if (error as NSError).code == NSURLErrorCancelled { return }
             parent.onEvent(.failed("网络错误：\(error.localizedDescription)"))
         }
 
@@ -170,6 +207,8 @@ struct LoginWebView: UIViewRepresentable {
                     if self.finished { return }
                     if let token = await self.readToken(from: webView) {
                         self.finished = true
+                        // 凭证到手就不用再加载页面了，让 WebView 安静下来，后面移除它才不卡
+                        webView.stopLoading()
                         self.parent.onEvent(
                             .token(access: token.access, refresh: token.refresh, expireAt: token.expireAt)
                         )
