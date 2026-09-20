@@ -29,6 +29,16 @@ jobs:
       - name: 从 project.yml 生成 Xcode 工程
         run: xcodegen generate
 
+      # 产物名带上版本号：之前一直叫 CqieTimetable-unsigned，和旧包同名，
+      # 下载解压后很容易拿错，装上还以为没更新
+      - name: 读出版本号，给产物命名用
+        id: version
+        run: |
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" CqieTimetable/Info.plist)
+          BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" CqieTimetable/Info.plist)
+          echo "tag=v${VERSION}-${BUILD}" >> "$GITHUB_OUTPUT"
+          echo "本次版本：v${VERSION}(${BUILD})"
+
       - name: 编译（不签名）
         run: |
           set -o pipefail
@@ -48,25 +58,27 @@ jobs:
 
       - name: 打包成 ipa
         run: |
+          IPA_NAME="CqieTimetable-${{ steps.version.outputs.tag }}-unsigned.ipa"
           APP_PATH="build/Build/Products/Release-iphoneos/CqieTimetable.app"
           if [ ! -d "$APP_PATH" ]; then
             echo "没找到编译产物 $APP_PATH"
             find build/Build/Products -maxdepth 3 -name "*.app" -print
             exit 1
           fi
-          rm -rf Payload CqieTimetable-unsigned.ipa
+          rm -rf Payload "$IPA_NAME"
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
-          zip -qry CqieTimetable-unsigned.ipa Payload
+          zip -qry "$IPA_NAME" Payload
+          echo "包名：$IPA_NAME"
           echo "包大小："
-          ls -lh CqieTimetable-unsigned.ipa
+          ls -lh "$IPA_NAME"
           echo "包内容："
-          unzip -l CqieTimetable-unsigned.ipa | head -20
+          unzip -l "$IPA_NAME" | head -20
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: CqieTimetable-unsigned-ipa
-          path: CqieTimetable-unsigned.ipa
+          name: CqieTimetable-${{ steps.version.outputs.tag }}-unsigned-ipa
+          path: CqieTimetable-*.ipa
           if-no-files-found: error
           retention-days: 30

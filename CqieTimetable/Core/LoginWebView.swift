@@ -31,12 +31,23 @@ enum SchoolWebSession {
     /// 必须在创建登录 WebView **之前** await 完，否则 WebView 已经带着旧 cookie 发请求了。
     static func clear() async {
         let store = WKWebsiteDataStore.default()
+
+        // 按站点清：localStorage / IndexedDB / 缓存都在这
         let types = WKWebsiteDataStore.allWebsiteDataTypes()
         let records = await store.dataRecords(ofTypes: types)
         let targets = records.filter { $0.displayName.contains(domainSuffix) }
         if !targets.isEmpty {
             await store.removeData(ofTypes: types, for: targets)
         }
+
+        // cookie 再单独走一遍：CAS 的会话票据（CASTGC）就在这里，
+        // 只靠上面那次 removeData 不保证删干净，删不掉就等于没换账号
+        let cookieStore = store.httpCookieStore
+        for cookie in await cookieStore.allCookies()
+        where cookie.domain.contains(domainSuffix) {
+            await cookieStore.deleteCookie(cookie)
+        }
+
         // URLSession 用的是另一份 cookie 存储，顺手一并清掉
         for cookie in (HTTPCookieStorage.shared.cookies ?? [])
         where cookie.domain.contains(domainSuffix) {
