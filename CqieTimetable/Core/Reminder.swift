@@ -235,3 +235,18 @@ enum ClassReminder {
         return value == 1 ? 7 : value - 1
     }
 }
+
+/// App 在前台时，系统默认不显示本地通知——而上课提醒很可能正好撞上用户
+/// 开着 App 看课表。显式接管，要求照常弹横幅。
+final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
+
+    static let shared = NotificationPresenter()
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+}
