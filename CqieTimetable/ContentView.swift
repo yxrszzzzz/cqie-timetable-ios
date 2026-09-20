@@ -1,58 +1,123 @@
 import SwiftUI
-import UIKit
 
-/// 打样页：这一版只为验证「CI 编译 → 未签名 ipa → 爱思助手签名装机」这条链路是通的。
-/// 链路确认没问题之后，再往上搬登录、课表、导入这些真正的功能。
+/// Stage 1：先把数据链路跑通——登录拿到 token，再拉回真实课表。
+/// 界面上先用文字列表印证数据对不对，课表网格放到下一步。
 struct ContentView: View {
-    private var version: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-"
-    }
 
-    private var build: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "-"
-    }
+    @StateObject private var model = AppViewModel()
 
     var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    statusRow
+                    if model.showLoginWebView {
+                        loginWebView
+                    }
+                    if model.loggedIn {
+                        loadedSection
+                    } else {
+                        loginSection
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("重工课表")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Text("v\(AppInfo.version)(\(AppInfo.build))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
 
-            Text("重工课表")
-                .font(.largeTitle.bold())
-
-            Text("iOS 打样构建")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-
-            Text("如果你能在手机上看到这一页，说明构建、签名、安装这条链路已经跑通了。")
+    private var statusRow: some View {
+        HStack(alignment: .top, spacing: 8) {
+            if model.busy {
+                ProgressView().controlSize(.small)
+            }
+            Text(model.statusText)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
 
-            Divider().padding(.horizontal, 40)
+    /// 登录过程中把页面显示出来：既能看到进度，自动流程走不通时也能手动接管
+    private var loginWebView: some View {
+        LoginWebView(account: model.account, password: model.password) { event in
+            model.onLoginEvent(event)
+        }
+        .frame(height: 300)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.3))
+        )
+    }
 
-            VStack(spacing: 8) {
-                row("版本", version)
-                row("构建号", build)
-                row("机型", UIDevice.current.model)
-                row("系统", "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
+    private var loginSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("学号", text: $model.account)
+                .textFieldStyle(.roundedBorder)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.numbersAndPunctuation)
+
+            SecureField("密码", text: $model.password)
+                .textFieldStyle(.roundedBorder)
+
+            Button {
+                model.startLogin()
+            } label: {
+                Text(model.busy ? "登录中…" : "登录并拉取课表")
+                    .frame(maxWidth: .infinity)
             }
-            .font(.footnote)
-            .padding(.horizontal, 40)
+            .buttonStyle(.borderedProminent)
+            .disabled(model.busy || model.account.isEmpty || model.password.isEmpty)
 
-            Spacer()
+            Text("账号密码只用于学校自己的登录页面，不保存在本机。")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
     }
 
-    private func row(_ title: String, _ value: String) -> some View {
-        HStack {
-            Text(title).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).monospacedDigit()
+    private var loadedSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(model.summary)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if model.preview.isEmpty {
+                Text("这门课表里没有课程").font(.footnote).foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(model.preview.enumerated()), id: \.offset) { entry in
+                        Text(entry.element)
+                            .font(.caption)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(10)
+                .background(Color.secondary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            HStack {
+                Button("重新登录") {
+                    model.loggedIn = false
+                    model.statusText = "填入学号和密码，登录后自动拉取课表"
+                }
+                .buttonStyle(.bordered)
+
+                Button("退出登录", role: .destructive) {
+                    model.logout()
+                }
+                .buttonStyle(.bordered)
+            }
         }
     }
-}
-
-#Preview {
-    ContentView()
 }
