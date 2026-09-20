@@ -206,9 +206,13 @@ enum OfficialTimetableParser {
                 let piece = part.trimmingCharacters(in: .whitespaces)
                 if piece.isEmpty { return nil }
                 let groups = classItem.groups(piece)
+                // 下标先落到局部变量：直接连着写 `groups?[2].flatMap`，
+                // 那个 `?[` 会被当成三元运算符的开头，flatMap 会解析成 Sequence 版本，
+                // 于是闭包参数成了 Character、返回值成了 [Double]
+                let studentText = groups?[2]
                 return TeachingObject(
                     className: (groups?[1] ?? piece).trimmingCharacters(in: .whitespaces),
-                    stuNums: groups?[2].flatMap { Double($0) }
+                    stuNums: studentText.flatMap { Double($0) }
                 )
             }
     }
