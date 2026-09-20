@@ -34,20 +34,18 @@ struct ClassTimetableItem: Decodable {
     var weekDayFormat: String?
     var wholeWeekOccupy: Bool?
     var selectedStuNum: String?
+    /// 组班信息，如 24财管5班(47)
+    var assignTeachingObject: [TeachingObject]?
 
-    /// 星期几，接口可能给 weekDay 也可能给 weekDayFormat
-    var dayOfWeek: String? {
-        (weekDayFormat ?? weekDay)?.trimmingCharacters(in: .whitespaces)
-    }
-
-    /// 节次文本
-    var periodText: String? {
-        (periodFormat ?? period)?.trimmingCharacters(in: .whitespaces)
-    }
-
-    /// 没排教室的按网课处理（学校自己的约定）
-    var isOnline: Bool {
-        (roomName ?? "").isEmpty && (roomLabel ?? "").isEmpty
+    /// 星期几（1~7）。
+    ///
+    /// 注意两个字段长得不一样：`weekDay` 是数字字符串（"3"），
+    /// `weekDayFormat` 是中文数字（"三"）。优先用能直接转数字的那个。
+    var dayOfWeek: Int? {
+        if let raw = weekDay, let value = Int(raw.trimmingCharacters(in: .whitespaces)) {
+            return value
+        }
+        return WeekUtil.number(weekDayFormat)
     }
 }
 
@@ -83,6 +81,14 @@ struct PeriodItem: Decodable {
     var smallPeriod: Int?
     var startTime: String?
     var endTime: String?
+}
+
+/// 组班的一项。stuNums 实测是数字，但服务端字段类型不稳定，用 Double 兜住再取整。
+struct TeachingObject: Decodable {
+    var className: String?
+    var stuNums: Double?
+
+    var studentCount: Int? { stuNums.map { Int($0) } }
 }
 
 /// GET /authserver/simple-user

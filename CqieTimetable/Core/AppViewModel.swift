@@ -11,7 +11,10 @@ final class AppViewModel: ObservableObject {
     @Published var busy = false
     @Published var loggedIn = false
     @Published var summary = ""
-    @Published var preview: [String] = []
+    /// 课表数据。为空表示还没拉到，界面就停在登录页。
+    @Published var data: TimetableData?
+    /// 当前查看的周次
+    @Published var week: Int = 1
 
     private let api = CqieApi()
     private lazy var auth = AuthRepository(api: api)
@@ -84,11 +87,20 @@ final class AppViewModel: ObservableObject {
         }
     }
 
+    /// 回到登录页换账号。刻意不清 token——万一登录又失败，重启还能接着用原来的
+    func relogin() {
+        showLoginWebView = false
+        data = nil
+        loggedIn = false
+        summary = ""
+        statusText = "填入学号和密码，登录后自动拉取课表"
+    }
+
     func logout() {
         auth.clear()
         loggedIn = false
         showLoginWebView = false
-        preview = []
+        data = nil
         summary = ""
         statusText = "已退出登录"
     }
@@ -111,16 +123,12 @@ final class AppViewModel: ObservableObject {
             let schedule = try await api.schedule(token: token, studentId: studentId, sessionId: session.id)
             let periods = (try? await api.timePattern(token: token)) ?? []
 
-            let name = user?.name ?? auth.current?.studentName ?? ""
-            summary = "\(name) · \(session.displayName) · \(schedule.items.count) 门课 · 作息 \(periods.count) 小节"
-                + " · 学期 \(session.beginDate ?? "?") ~ \(session.endDate ?? "?")"
+            let built = TimetableBuilder.build(session: session, schedule: schedule, periods: periods)
+            self.data = built
+            self.week = built.currentWeek
 
-            preview = schedule.items.prefix(20).map { item in
-                let day = item.dayOfWeek ?? "—"
-                let period = item.periodText ?? "—"
-                let where_ = item.isOnline ? "网课" : (item.roomName ?? "")
-                return "周\(day) \(period)节   \(item.courseName ?? "未命名")   \(where_)   \(item.instructorName ?? "")"
-            }
+            let name = user?.name ?? auth.current?.studentName ?? ""
+            summary = "\(name) · \(session.displayName) · \(built.courses.count) 门课"
             statusText = "课表已加载"
         } catch {
             statusText = describe(error)

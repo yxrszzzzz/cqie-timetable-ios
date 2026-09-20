@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Stage 1：先把数据链路跑通——登录拿到 token，再拉回真实课表。
-/// 界面上先用文字列表印证数据对不对，课表网格放到下一步。
+/// Stage 2：课表网格。登录拿 token → 拉课表 → 画周视图。
 struct ContentView: View {
 
     @StateObject private var model = AppViewModel()
@@ -14,11 +13,12 @@ struct ContentView: View {
                     if model.showLoginWebView {
                         loginWebView
                     }
-                    if model.loggedIn {
+                    if model.data != nil {
                         loadedSection
-                    } else {
+                    } else if !model.loggedIn {
                         loginSection
                     }
+                    versionFooter
                 }
                 .padding()
             }
@@ -26,9 +26,14 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Text("v\(AppInfo.version)(\(AppInfo.build))")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    if model.loggedIn {
+                        Menu {
+                            Button("重新登录") { model.relogin() }
+                            Button("退出登录", role: .destructive) { model.logout() }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
+                    }
                 }
             }
         }
@@ -87,37 +92,18 @@ struct ContentView: View {
     private var loadedSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(model.summary)
-                .font(.subheadline)
-                .fontWeight(.medium)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-            if model.preview.isEmpty {
-                Text("这门课表里没有课程").font(.footnote).foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(model.preview.enumerated()), id: \.offset) { entry in
-                        Text(entry.element)
-                            .font(.caption)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .padding(10)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-
-            HStack {
-                Button("重新登录") {
-                    model.loggedIn = false
-                    model.statusText = "填入学号和密码，登录后自动拉取课表"
-                }
-                .buttonStyle(.bordered)
-
-                Button("退出登录", role: .destructive) {
-                    model.logout()
-                }
-                .buttonStyle(.bordered)
-            }
+            TimetableScreen(model: model)
         }
+    }
+
+    private var versionFooter: some View {
+        Text("v\(AppInfo.version)(\(AppInfo.build))")
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, 6)
     }
 }
