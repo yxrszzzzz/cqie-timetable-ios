@@ -5,8 +5,11 @@ import UIKit
 struct ContentView: View {
 
     @StateObject private var model = AppViewModel()
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var share: SharePayload?
     @State private var showQuery = false
+    @State private var showReminder = false
 
     var body: some View {
         NavigationStack {
@@ -41,6 +44,7 @@ struct ContentView: View {
                     if model.loggedIn {
                         Menu {
                             Button("课表查询", systemImage: "magnifyingglass") { showQuery = true }
+                            Button("上课提醒", systemImage: "bell") { showReminder = true }
                             Button("重新登录") { model.relogin() }
                             Button("退出登录", role: .destructive) { model.logout() }
                         } label: {
@@ -52,6 +56,14 @@ struct ContentView: View {
         }
         .sheet(item: $share) { payload in
             ShareSheet(url: payload.url)
+        }
+        .sheet(isPresented: $showReminder) {
+            ReminderSheet(model: model)
+        }
+        .onChange(of: scenePhase) { phase in
+            // 提醒只排未来一周，回到前台时把窗口往前续一次
+            guard phase == .active, let data = model.data else { return }
+            Task { await ClassReminder.reschedule(data) }
         }
     }
 

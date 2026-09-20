@@ -41,6 +41,8 @@ final class AppViewModel: ObservableObject {
             let name = session.studentName.isEmpty ? session.studentId : session.studentName
             summary = "\(name) · \(cached.session.displayName) · \(cached.courses.count) 门课"
             statusText = "已显示本机缓存的课表，正在刷新…"
+            // 先把提醒窗口按缓存续上，万一这次刷新失败也不至于断档
+            Task { await ClassReminder.reschedule(cached) }
         } else {
             statusText = "已恢复登录（\(session.studentName)），正在拉取课表…"
         }
@@ -137,6 +139,8 @@ final class AppViewModel: ObservableObject {
         statusText = "正在清理登录状态…"
         Task {
             await SchoolWebSession.clear()
+            // 登出之后不该再提醒上课
+            await ClassReminder.reschedule(nil)
             statusText = "已退出登录"
         }
     }
@@ -171,6 +175,9 @@ final class AppViewModel: ObservableObject {
             studentName = name
             summary = "\(name) · \(session.displayName) · \(built.courses.count) 门课"
             statusText = "课表已加载"
+
+            // 课程可能有调整，提醒窗口跟着重排一次
+            await ClassReminder.reschedule(built)
         } catch {
             // 手上有缓存时别把已经显示出来的课表抹掉，只说明刷新没成功
             if data != nil {
