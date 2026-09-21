@@ -21,7 +21,8 @@ struct TimetableScreen: View {
                     data: data,
                     week: model.week,
                     onTapCourse: { detail = $0 },
-                    onTapCollision: { collision = CollisionPayload(courses: $0) }
+                    onTapCollision: { collision = CollisionPayload(courses: $0) },
+                    background: model.background
                 )
                 .background(Color.secondary.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 10))

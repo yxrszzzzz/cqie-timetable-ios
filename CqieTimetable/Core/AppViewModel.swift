@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 @MainActor
 final class AppViewModel: ObservableObject {
@@ -17,6 +18,8 @@ final class AppViewModel: ObservableObject {
     @Published var data: TimetableData?
     /// 当前查看的周次
     @Published var week: Int = 1
+    /// 课表底图，没设置过为 nil
+    @Published var background: UIImage?
 
     /// 课表查询那边要复用同一份 api 与登录态，所以不设为 private
     let api: CqieApi
@@ -29,6 +32,7 @@ final class AppViewModel: ObservableObject {
         if let saved = auth.rememberedAccount, !saved.isEmpty {
             account = saved
         }
+        background = TimetableBackground.load()
         let cached = TimetableStore.load()
         let restored = auth.restore()
 
@@ -211,6 +215,25 @@ final class AppViewModel: ObservableObject {
     /// 界面自己发起的操作出错时，借状态栏说一声
     func report(_ message: String) {
         statusText = message
+    }
+
+    // MARK: - 课表底图
+
+    /// 存下底图，失败返回 false。
+    /// 图是压缩后存进沙盒的，不依赖相册里那张原图还在不在
+    @discardableResult
+    func setBackground(_ image: UIImage) -> Bool {
+        guard TimetableBackground.save(image) else {
+            statusText = "这张图存不下来，换一张试试"
+            return false
+        }
+        background = TimetableBackground.load()
+        return true
+    }
+
+    func clearBackground() {
+        TimetableBackground.clear()
+        background = nil
     }
 
     /// 导入官网导出的课表：直接替换当前显示的课表。

@@ -103,24 +103,37 @@ struct TimetableGrid: View {
     let week: Int
     let onTapCourse: (Course) -> Void
     let onTapCollision: ([Course]) -> Void
+    var background: UIImage?
 
     private static let dayNames = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
     private static let gutterWidth: CGFloat = 38
     private static let rowHeight: CGFloat = 56
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerView
-            Divider()
-            ForEach(1...data.visibleSectionCount, id: \.self) { section in
-                HStack(spacing: 0) {
-                    gutter(section)
-                    ForEach(1...7, id: \.self) { day in
-                        cell(day: day, section: section)
-                    }
-                }
-                .frame(height: Self.rowHeight)
+        ZStack {
+            if let background {
+                Image(uiImage: background)
+                    .resizable()
+                    .scaledToFill()
+                    .clipped()
+                // 蒙一层系统背景色。课程块是不透明的实色、不受影响；
+                // 这一层保的是节次、日期、表头这些细字，底图再花也得读得清。
+                Color(.systemBackground).opacity(TimetableBackground.scrimOpacity)
+            }
+
+            VStack(spacing: 0) {
+                headerView
                 Divider()
+                ForEach(1...data.visibleSectionCount, id: \.self) { section in
+                    HStack(spacing: 0) {
+                        gutter(section)
+                        ForEach(1...7, id: \.self) { day in
+                            cell(day: day, section: section)
+                        }
+                    }
+                    .frame(height: Self.rowHeight)
+                    Divider()
+                }
             }
         }
     }
@@ -150,6 +163,8 @@ struct TimetableGrid: View {
             }
         }
         .padding(.vertical, 6)
+        // 有底图时改半透明：叠在蒙版之上比网格区更实一点，滚动时也挡得住
+        .background(Color(.systemBackground).opacity(background == nil ? 1 : 0.6))
     }
 
     private func gutter(_ section: Int) -> some View {

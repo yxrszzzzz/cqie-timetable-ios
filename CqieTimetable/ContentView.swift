@@ -39,6 +39,7 @@ struct ContentView: View {
                     if model.loggedIn || model.data != nil {
                         Menu {
                             Button("上课提醒", systemImage: "bell") { activeSheet = .reminder }
+                            Button("课表底图", systemImage: "photo") { activeSheet = .background }
                             Button("导入课表", systemImage: "square.and.arrow.down") {
                                 activeSheet = .importTimetable
                             }
@@ -61,6 +62,8 @@ struct ContentView: View {
                 ShareSheet(url: url)
             case .reminder:
                 ReminderSheet(model: model)
+            case .background:
+                BackgroundSheet(model: model)
             case .importTimetable:
                 ImportView { model.applyImported($0) }
             case .query:
@@ -203,10 +206,11 @@ struct ContentView: View {
     }
 }
 
-/// 分享、提醒、查询、导入共用一个 sheet 位
+/// 分享、提醒、底图、查询、导入共用一个 sheet 位
 private enum ActiveSheet: Identifiable {
     case share(URL)
     case reminder
+    case background
     case importTimetable
     case query
 
@@ -214,6 +218,7 @@ private enum ActiveSheet: Identifiable {
         switch self {
         case .share(let url): return "share-\(url.absoluteString)"
         case .reminder: return "reminder"
+        case .background: return "background"
         case .importTimetable: return "import"
         case .query: return "query"
         }
