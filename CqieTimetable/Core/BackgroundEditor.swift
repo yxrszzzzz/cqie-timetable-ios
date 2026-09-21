@@ -87,11 +87,54 @@ struct BackgroundEditor: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .allowsHitTesting(false)
+
+            // 把图片实际铺到的范围描出来。缩小或转过之后会有盖不满的地方，
+            // 只对着课表摆是看不出来哪儿空着的
+            outline(size: size)
         }
         .frame(width: size.width, height: size.height)
         .clipped()
         .contentShape(Rectangle())
         .gesture(combinedGesture)
+    }
+
+    /// 描出底图实际占的位置。算法和 `bake` 是同一套，所以描出来的框就是存下来之后
+    /// 图真正铺到的地方。
+    private func outline(size: CGSize) -> some View {
+        Canvas { context, canvasSize in
+            guard canvasSize.width > 0, canvasSize.height > 0 else { return }
+
+            let cover = max(
+                canvasSize.width / source.size.width,
+                canvasSize.height / source.size.height
+            )
+            let halfWidth = source.size.width * cover * scale / 2
+            let halfHeight = source.size.height * cover * scale / 2
+            let centerX = canvasSize.width / 2 + offset.width
+            let centerY = canvasSize.height / 2 + offset.height
+
+            let radians = rotation.radians
+            let cosA = cos(radians)
+            let sinA = sin(radians)
+
+            func corner(_ dx: CGFloat, _ dy: CGFloat) -> CGPoint {
+                CGPoint(
+                    x: centerX + dx * cosA - dy * sinA,
+                    y: centerY + dx * sinA + dy * cosA
+                )
+            }
+
+            var path = Path()
+            path.move(to: corner(-halfWidth, -halfHeight))
+            path.addLine(to: corner(halfWidth, -halfHeight))
+            path.addLine(to: corner(halfWidth, halfHeight))
+            path.addLine(to: corner(-halfWidth, halfHeight))
+            path.closeSubpath()
+
+            context.stroke(path, with: .color(.white.opacity(0.7)), lineWidth: 1.5)
+        }
+        .frame(width: size.width, height: size.height)
+        .allowsHitTesting(false)
     }
 
     private var combinedGesture: some Gesture {
