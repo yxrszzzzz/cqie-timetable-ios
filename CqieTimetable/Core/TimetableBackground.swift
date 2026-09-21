@@ -56,8 +56,11 @@ enum TimetableBackground {
         }
     }
 
-    /// 压缩后的最长边。课表最多铺满一块屏幕，原图那几 MB 存着没意义
-    private static let maxEdge: CGFloat = 1600
+    /// 压缩后的最长边。
+    ///
+    /// 要盖得住所有 iPhone 的屏幕像素：15 Pro Max 是 1290×2796，普通款是 1170×2532。
+    /// 这里给到 3000 就都压不着了——烘焙出来就是屏幕像素，再缩一次反而会糊。
+    private static let maxEdge: CGFloat = 3000
 
     private static let fileName = "timetable_background.jpg"
 
@@ -75,7 +78,7 @@ enum TimetableBackground {
     /// 压缩后存进沙盒，失败返回 false
     @discardableResult
     static func save(_ image: UIImage) -> Bool {
-        guard let data = resized(image).jpegData(compressionQuality: 0.88) else { return false }
+        guard let data = resized(image).jpegData(compressionQuality: 0.92) else { return false }
         do {
             try data.write(to: fileURL, options: .atomic)
             return true
@@ -93,11 +96,13 @@ enum TimetableBackground {
         let longest = max(image.size.width, image.size.height)
         guard longest > maxEdge, longest > 0 else { return image }
 
-        let scale = maxEdge / longest
-        let target = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let ratio = maxEdge / longest
+        let target = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
 
         let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
+        // 这里必须用屏幕的像素密度。默认值 1 会把「点」当成「像素」，
+        // 缩放后的图只有实际需要的三分之一，显示出来是糊的
+        format.scale = UIScreen.main.scale
         return UIGraphicsImageRenderer(size: target, format: format).image { _ in
             image.draw(in: CGRect(origin: .zero, size: target))
         }

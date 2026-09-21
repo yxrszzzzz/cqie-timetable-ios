@@ -289,7 +289,9 @@ private func bake(
     offset: CGSize
 ) -> UIImage {
     let format = UIGraphicsImageRendererFormat.default()
-    format.scale = 1
+    // 关键：`frame` 是「点」，而 format.scale 默认是 1，那样烘出来的图只有屏幕实际
+    // 像素的三分之一，一显示就糊。必须用屏幕的像素密度
+    format.scale = UIScreen.main.scale
     format.opaque = true
 
     return UIGraphicsImageRenderer(size: frame, format: format).image { context in
