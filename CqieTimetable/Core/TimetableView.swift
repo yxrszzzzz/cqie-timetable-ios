@@ -122,7 +122,8 @@ struct TimetableGrid: View {
                     }
                 }
                 .frame(height: Self.rowHeight)
-                Divider()
+                // 行之间不画分隔线：跨节次上的同一门课会被它切出一条缝。
+                // 网格感由节次栏和列之间的竖线提供就够了
             }
         }
     }
