@@ -49,16 +49,17 @@ struct BackgroundEditor: View {
         // 取景框尺寸既用来预览、也用来烘焙，必须是同一个值
         GeometryReader { proxy in
             ZStack(alignment: .bottom) {
-                canvas(size: proxy.size)
+                canvas(size: proxy.size, safeTop: proxy.safeAreaInsets.top)
                 bottomBar(size: proxy.size)
             }
         }
         .ignoresSafeArea()
     }
 
-    private func canvas(size: CGSize) -> some View {
+    private func canvas(size: CGSize, safeTop: CGFloat) -> some View {
         ZStack {
             Color.black
+                .ignoresSafeArea()
 
             Image(uiImage: source)
                 .resizable()
@@ -72,7 +73,10 @@ struct BackgroundEditor: View {
             Color(.systemBackground).opacity(1 - opacity)
 
             // 真实课表。编辑期间它只是给人看的，所以不接任何操作——
-            // 手势要留给底下那层拖动底图
+            // 手势要留给底下那层拖动底图。
+            //
+            // 这里要让出顶部安全区：底图该铺满全屏，但课表得和首页一样从状态栏
+            // 下面开始，否则表头会被刘海压住，摆位置时没法对齐
             TimetableGrid(
                 data: data,
                 week: week,
@@ -81,6 +85,7 @@ struct BackgroundEditor: View {
                 hasBackground: true,
                 chromeOpacity: chromeOpacity
             )
+            .padding(.top, safeTop)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .allowsHitTesting(false)
 
@@ -91,7 +96,7 @@ struct BackgroundEditor: View {
         .frame(width: size.width, height: size.height)
         .clipped()
         .contentShape(Rectangle())
-        .gesture(combinedGesture)
+        .gesture(combinedGesture(size: size))
     }
 
     /// 描出底图实际占的位置。算法和 `bake` 是同一套，所以描出来的框就是存下来之后
@@ -133,7 +138,7 @@ struct BackgroundEditor: View {
         .allowsHitTesting(false)
     }
 
-    private var combinedGesture: some Gesture {
+    private func combinedGesture(size: CGSize) -> some Gesture {
         SimultaneousGesture(
             SimultaneousGesture(
                 MagnificationGesture()
@@ -145,15 +150,29 @@ struct BackgroundEditor: View {
                     .onChanged { value in rotation = settledRotation + value }
                     .onEnded { _ in settledRotation = rotation }
             ),
+            // 位移要限个范围。两指旋转时 DragGesture 也在跟第一根手指的位移，
+            // 边转边移很容易把图甩到屏幕外面去，看着就像「图片不见了」
             DragGesture()
                 .onChanged { value in
                     offset = CGSize(
-                        width: settledOffset.width + value.translation.width,
-                        height: settledOffset.height + value.translation.height
+                        width: clamp(
+                            settledOffset.width + value.translation.width,
+                            -size.width / 2,
+                            size.width / 2
+                        ),
+                        height: clamp(
+                            settledOffset.height + value.translation.height,
+                            -size.height / 2,
+                            size.height / 2
+                        )
                     )
                 }
                 .onEnded { _ in settledOffset = offset }
         )
+    }
+
+    private func clamp(_ value: CGFloat, _ lower: CGFloat, _ upper: CGFloat) -> CGFloat {
+        min(max(value, lower), upper)
     }
 
     // MARK: - 控制条（半透明，压在预览之下）
@@ -166,47 +185,48 @@ struct BackgroundEditor: View {
     }
 
     private func bottomBar(size: CGSize) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                Text("旋转").font(.caption)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 14) {
+                Text("旋转").font(.subheadline)
                 Button {
                     turn(by: -90)
                 } label: {
-                    Image(systemName: "rotate.left")
+                    Image(systemName: "rotate.left").font(.title3)
                 }
+                .buttonStyle(.bordered)
                 .accessibilityLabel("向左转 90°")
                 Button {
                     turn(by: 90)
                 } label: {
-                    Image(systemName: "rotate.right")
+                    Image(systemName: "rotate.right").font(.title3)
                 }
+                .buttonStyle(.bordered)
                 .accessibilityLabel("向右转 90°")
                 Spacer()
                 Button("复位") { reset() }
+                    .buttonStyle(.bordered)
             }
-            .font(.caption)
-            .buttonStyle(.borderless)
 
             Text("底图不透明度 \(Int((opacity * 100).rounded()))%")
-                .font(.caption)
+                .font(.subheadline)
             Slider(
                 value: $opacity,
                 in: TimetableBackground.minOpacity...TimetableBackground.maxOpacity
             )
 
-            HStack {
+            HStack(spacing: 12) {
                 Text("单指拖动摆放")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("取消", action: onCancel)
+                    .buttonStyle(.bordered)
                 Button("确定") { confirm(size: size) }
-                    .fontWeight(.semibold)
+                    .buttonStyle(.borderedProminent)
             }
-            .font(.caption)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.vertical, 14)
         .background(barColor)
     }
 

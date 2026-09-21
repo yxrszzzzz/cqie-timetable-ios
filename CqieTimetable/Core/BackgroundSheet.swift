@@ -109,6 +109,13 @@ struct BackgroundSheet: View {
             return
         }
         failed = false
+        picked = nil
+
+        // 编辑器是挂在 ContentView 上的 fullScreenCover，这个 sheet 还占着屏幕时
+        // 它弹不出来。所以先把自己关掉、等退场动画走完，再开编辑器
+        dismiss()
+        try? await Task.sleep(nanoseconds: 350_000_000)
+
         // 先进编辑器摆好位置和浓度，确认了才当底图用
         model.beginBackgroundEdit(image)
     }
