@@ -78,7 +78,7 @@ enum TimetableBackground {
     /// 压缩后存进沙盒，失败返回 false
     @discardableResult
     static func save(_ image: UIImage) -> Bool {
-        guard let data = resized(image).jpegData(compressionQuality: 0.92) else { return false }
+        guard let data = resized(image).jpegData(compressionQuality: 0.95) else { return false }
         do {
             try data.write(to: fileURL, options: .atomic)
             return true

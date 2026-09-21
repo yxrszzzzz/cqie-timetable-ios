@@ -170,6 +170,9 @@ struct TimetableGrid: View {
             }
         }
         .frame(width: Self.gutterWidth)
+        // 必须撑满整行高度。只给宽度的话，这一列的高度就只剩内容那么高（约 20pt，
+        // 一行是 56pt），底衬只在中间画一段——有底图时看着就是「123 断开了」
+        .frame(maxHeight: .infinity)
         // 节次栏也留一层底。底图调到接近全屏可见时整屏都是图，
         // 没这层的话「第几节」和上课时间会糊在背景里读不出来
         .background(Color(.systemBackground).opacity(hasBackground ? chromeOpacity : 1))

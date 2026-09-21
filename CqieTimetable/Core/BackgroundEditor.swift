@@ -16,6 +16,11 @@ struct BackgroundEditor: View {
     let onCancel: () -> Void
     let onConfirm: (UIImage, Double) -> Void
 
+    /// 当前屏幕的渲染倍率（iPhone 一般是 3）。
+    /// 用它而不是 `UIScreen.main.scale`——后者在 iOS 16 之后不推荐，某些场景会返回 1，
+    /// 那样烘出来的图只有实际像素的三分之一，一显示就糊
+    @Environment(\.displayScale) private var displayScale
+
     /// 手势过程中在变化的值
     @State private var scale: CGFloat = 1
     @State private var rotation: Angle = .zero
@@ -267,7 +272,8 @@ struct BackgroundEditor: View {
                 frame: size,
                 scale: scale,
                 rotation: rotation,
-                offset: offset
+                offset: offset,
+                displayScale: displayScale
             ),
             opacity
         )
@@ -286,16 +292,22 @@ private func bake(
     frame: CGSize,
     scale: CGFloat,
     rotation: Angle,
-    offset: CGSize
+    offset: CGSize,
+    displayScale: CGFloat
 ) -> UIImage {
     let format = UIGraphicsImageRendererFormat.default()
-    // 关键：`frame` 是「点」，而 format.scale 默认是 1，那样烘出来的图只有屏幕实际
-    // 像素的三分之一，一显示就糊。必须用屏幕的像素密度
-    format.scale = UIScreen.main.scale
+    // 关键：`frame` 的单位是「点」，format.scale 决定一个点画多少像素。
+    // 用 1 的话烘出来的图只有屏幕实际像素的三分之一，一显示就被拉伸 3 倍，糊
+    format.scale = max(displayScale, 1)
     format.opaque = true
 
     return UIGraphicsImageRenderer(size: frame, format: format).image { context in
         let cg = context.cgContext
+        // 手机拍的原图动辄 4000~8000 像素宽，要压到屏幕这点像素（约 1200 宽），
+        // 缩小倍数常常超过 3 倍。CG 默认的插值质量在这种倍数下是直接抽样的效果——
+        // 细密的纹理（树叶、布纹、字）会糊成一片。编辑器里的预览走的是 SwiftUI 的
+        // 高质量滤波，所以「预览清楚、存下来变糊」多半是栽在这儿
+        cg.interpolationQuality = .high
         cg.setFillColor(UIColor.black.cgColor)
         cg.fill(CGRect(origin: .zero, size: frame))
 

@@ -12,6 +12,7 @@ struct BackgroundSheet: View {
     @ObservedObject var model: AppViewModel
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.displayScale) private var displayScale
 
     @State private var picked: PhotosPickerItem?
     @State private var failed = false
@@ -37,7 +38,7 @@ struct BackgroundSheet: View {
                     Text("选一张图当课表的底，选完可以拖动、双指缩放和旋转来摆放，预览就是首页的样子。")
                 }
 
-                if model.background != nil {
+                if let background = model.background {
                     Section {
                         slider(
                             label: "底图不透明度",
@@ -51,6 +52,18 @@ struct BackgroundSheet: View {
                         Text("浓度")
                     } footer: {
                         Text("调高底图更清楚。课程块的底色完全不受影响，调到 100% 也还读得出课表。")
+                    }
+
+                    Section {
+                        HStack {
+                            Text("底图尺寸")
+                            Spacer()
+                            Text(sizeText(background))
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.footnote)
+                    } footer: {
+                        Text("底图是按屏幕像素存下来的。这里要是比屏幕小，显示时就会被拉伸，看着发糊——重新选一次图片即可。")
                     }
 
                     Section {
@@ -88,6 +101,16 @@ struct BackgroundSheet: View {
             guard let item else { return }
             Task { await load(item) }
         }
+    }
+
+    /// 「1179×2556（屏幕 1179×2556）」。底图比屏幕小就一定会被拉伸，是「发糊」最常见的原因，
+    /// 所以把两个数并排摆出来，一眼能看出来
+    private func sizeText(_ image: UIImage) -> String {
+        let pixels = "\(Int(image.size.width * image.scale))×\(Int(image.size.height * image.scale))"
+        let screen = UIScreen.main.bounds.size
+        let scale = max(displayScale, 1)
+        let screenPixels = "\(Int(screen.width * scale))×\(Int(screen.height * scale))"
+        return "\(pixels)（屏幕 \(screenPixels)）"
     }
 
     private func slider(
