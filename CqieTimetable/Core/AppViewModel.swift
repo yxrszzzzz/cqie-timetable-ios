@@ -26,6 +26,8 @@ final class AppViewModel: ObservableObject {
     @Published var chromeOpacity: Double = TimetableBackground.defaultChromeOpacity
     /// 正在编辑的底图，非空时界面会弹出编辑器
     @Published var backgroundEdit: BackgroundEditSession?
+    /// 自己写的课表备注。与课表数据分开存，刷新课表不会动它
+    @Published var notes: [TimetableNote] = []
 
     /// 课表查询那边要复用同一份 api 与登录态，所以不设为 private
     let api: CqieApi
@@ -41,6 +43,7 @@ final class AppViewModel: ObservableObject {
         background = TimetableBackground.load()
         backgroundOpacity = TimetableBackground.opacity
         chromeOpacity = TimetableBackground.chromeOpacity
+        notes = NoteStore.load()
         let cached = TimetableStore.load()
         let restored = auth.restore()
 
@@ -265,6 +268,22 @@ final class AppViewModel: ObservableObject {
     func clearBackground() {
         TimetableBackground.clear()
         background = nil
+    }
+
+    // MARK: - 课表备注
+
+    /// 存一张备注（新建和修改走同一条路：id 一样就覆盖）
+    ///
+    /// 存完顺手排序：一周里的便签是按节次从早到晚看的，插入顺序毫无意义。
+    func saveNote(_ note: TimetableNote) {
+        notes = (notes.filter { $0.id != note.id } + [note])
+            .sorted { ($0.weekDay, $0.sectionStart, $0.text) < ($1.weekDay, $1.sectionStart, $1.text) }
+        NoteStore.save(notes)
+    }
+
+    func deleteNote(id: String) {
+        notes.removeAll { $0.id == id }
+        NoteStore.save(notes)
     }
 
     /// 导入官网导出的课表：直接替换当前显示的课表。

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 课表页：周次选择 + 网格 + 不排时间的课
 struct TimetableScreen: View {
@@ -7,6 +8,8 @@ struct TimetableScreen: View {
 
     @State private var detail: Course?
     @State private var collision: CollisionPayload?
+    /// 正在编辑的备注：长按空白格给一张新的，点已有便签把它原样拿过来
+    @State private var noteDraft: TimetableNote?
 
     private struct CollisionPayload: Identifiable {
         let id = UUID()
@@ -23,13 +26,41 @@ struct TimetableScreen: View {
                     onTapCourse: { detail = $0 },
                     onTapCollision: { collision = CollisionPayload(courses: $0) },
                     hasBackground: model.background != nil,
-                    chromeOpacity: model.chromeOpacity
+                    chromeOpacity: model.chromeOpacity,
+                    notes: model.notes,
+                    onEmptyLongPress: { day, section in
+                        noteDraft = TimetableNote(
+                            id: UUID().uuidString,
+                            text: "",
+                            weekDay: day,
+                            sectionStart: section,
+                            sectionEnd: section,
+                            // 默认只勾当前这一周：手指按在第几周，条子就先贴在第几周。
+                            // 一进来就全选上反而要用户先「清空」再挑，多了两步
+                            weeks: [model.week],
+                            fillColor: nil,
+                            textColor: nil
+                        )
+                    },
+                    onTapNote: { noteDraft = $0 }
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 extraCourses(data)
             }
             .sheet(item: $detail) { CourseDetailSheet(course: $0) }
             .sheet(item: $collision) { CollisionSheet(courses: $0.courses) }
+            .sheet(item: $noteDraft) { draft in
+                NoteEditorSheet(
+                    initial: draft,
+                    // id 不在已存的备注里就是新建，决定标题、要不要给「删除」
+                    isNew: !model.notes.contains { $0.id == draft.id },
+                    sectionCount: data.visibleSectionCount,
+                    totalWeeks: data.totalWeeks,
+                    currentWeek: model.week,
+                    onSave: { model.saveNote($0) },
+                    onDelete: { model.deleteNote(id: draft.id) }
+                )
+            }
         }
     }
 

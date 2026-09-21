@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 课程配色：按课程名做哈希，同一门课永远是同一个颜色
 enum CoursePalette {
@@ -105,15 +106,57 @@ struct TimetableGrid: View {
     let onTapCollision: ([Course]) -> Void
     var hasBackground = false
     var chromeOpacity: Double = TimetableBackground.defaultChromeOpacity
+    var notes: [TimetableNote] = []
+    var onEmptyLongPress: (Int, Int) -> Void = { _, _ in }
+    var onTapNote: (TimetableNote) -> Void = { _ in }
 
     private static let dayNames = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
     private static let gutterWidth: CGFloat = 38
     private static let rowHeight: CGFloat = 56
 
+    /// 便签正文的行高。和字号（11）配着看：一行 13pt，56pt 的一格正好排三行
+    private static let noteLineHeight: CGFloat = 13
+
+    /// 网格宽度。便签要整块跨着画，得知道一列多宽——量出来再七等分，
+    /// 和 HStack 里 `maxWidth: .infinity` 分出来的是同一个值
+    @State private var gridWidth: CGFloat = 0
+
     var body: some View {
         VStack(spacing: 0) {
             headerView
             Divider()
+            ZStack(alignment: .topLeading) {
+                // 便签层压在网格下面：课程块是不透明的实色、自己会盖住它，
+                // 而空格子没有底色，便签正好从那儿透出来
+                if gridWidth > 0 {
+                    ForEach(visibleNotes) { note in
+                        noteSticker(note, cellWidth: (gridWidth - Self.gutterWidth) / 7)
+                    }
+                }
+                sectionRows
+            }
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { gridWidth = proxy.size.width }
+                        .onChange(of: proxy.size.width) { gridWidth = $0 }
+                }
+            )
+        }
+    }
+
+    /// 这一周该露出来的便签。整块画的写法不像逐格画那样自动带上「周次」条件，
+    /// 三个条件得自己写全：这一列、这一周、节次没超出网格
+    private var visibleNotes: [TimetableNote] {
+        notes.filter {
+            (1...7).contains($0.weekDay)
+                && $0.visibleIn(week: week)
+                && $0.sectionStart <= data.visibleSectionCount
+        }
+    }
+
+    private var sectionRows: some View {
+        VStack(spacing: 0) {
             ForEach(1...data.visibleSectionCount, id: \.self) { section in
                 HStack(spacing: 0) {
                     gutter(section)
@@ -126,6 +169,41 @@ struct TimetableGrid: View {
                 // 网格感由节次栏和列之间的竖线提供就够了
             }
         }
+    }
+
+    /// 一张便签。
+    ///
+    /// 整块画在网格下面、跨几节就有多高——文字因此能跨行排下来：一行 45pt 的格子里
+    /// 放不下的长备注，把节次拉宽到两节就写得下了。拆成「每节一格各画一截」的做法不行，
+    /// 那样文字只能挤在起始那一格里，行距还会被每一格的边界切开。
+    private func noteSticker(_ note: TimetableNote, cellWidth: CGFloat) -> some View {
+        let span = max(1, min(note.sectionEnd, data.visibleSectionCount) - note.sectionStart + 1)
+        let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+        let fill = (note.fillColor.map { Color(argb: $0) } ?? NoteStyle.defaultFill)
+            .opacity(NoteStyle.fillAlpha)
+        // 便签有多高就排得下几行：上下各留 3pt，11pt 的字一行约 13pt
+        let lines = max(1, Int((Self.rowHeight * CGFloat(span) - 6) / Self.noteLineHeight))
+
+        return Text(note.text)
+            .font(.system(size: 11, weight: .semibold))
+            // 没自己选色就跟主题走：浅色模式深字、深色模式浅字
+            .foregroundStyle(note.textColor.map { Color(argb: $0) } ?? Color.primary)
+            .multilineTextAlignment(.leading)
+            .lineLimit(lines)
+            .truncationMode(.tail)
+            .padding(.horizontal, 3)
+            .padding(.top, 3)
+            .frame(
+                width: max(cellWidth - 2, 1),
+                height: Self.rowHeight * CGFloat(span) - 2,
+                alignment: .topLeading
+            )
+            .clipShape(shape)
+            .background(shape.fill(fill))
+            .offset(
+                x: Self.gutterWidth + cellWidth * CGFloat(note.weekDay - 1) + 1,
+                y: Self.rowHeight * CGFloat(note.sectionStart - 1) + 1
+            )
     }
 
     private var headerView: some View {
@@ -180,12 +258,32 @@ struct TimetableGrid: View {
 
     private func cell(day: Int, section: Int) -> some View {
         let courses = data.coursesAt(week: week, weekDay: day, section: section)
+        let note = notes.noteAt(week: week, weekDay: day, section: section)
         return ZStack {
             content(courses: courses, section: section)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .trailing) {
             Rectangle().fill(Color.secondary.opacity(0.15)).frame(width: 0.5)
+        }
+        .contentShape(Rectangle())
+        // 便签铺在网格下面、点不到它自己，所以由它盖住的这一格替它接点击。
+        // 长按空白的格子＝新建备注。
+        //
+        // 有课的地方这一格不接管：点击本来就该归课程块，长按也不该冒出「添加备注」。
+        // 安卓那边是靠课程块消费掉按下事件自然做到的，这边显式判一下更稳
+        .onTapGesture {
+            if courses.isEmpty, let note = note { onTapNote(note) }
+        }
+        .onLongPressGesture {
+            guard courses.isEmpty else { return }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            // 已经贴了便签的地方，长按是「改这一张」，不再往上叠新的
+            if let note = note {
+                onTapNote(note)
+            } else {
+                onEmptyLongPress(day, section)
+            }
         }
     }
 

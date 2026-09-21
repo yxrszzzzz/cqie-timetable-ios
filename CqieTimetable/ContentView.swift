@@ -93,6 +93,7 @@ struct ContentView: View {
                     data: data,
                     week: model.week,
                     chromeOpacity: model.chromeOpacity,
+                    notes: model.notes,
                     initialOpacity: model.backgroundOpacity,
                     onCancel: { model.cancelBackgroundEdit() },
                     onConfirm: { image, opacity in

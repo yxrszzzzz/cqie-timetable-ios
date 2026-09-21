@@ -13,6 +13,8 @@ struct BackgroundEditor: View {
     let data: TimetableData
     let week: Int
     let chromeOpacity: Double
+    /// 自己写的备注也一起画上，预览才和首页一模一样
+    let notes: [TimetableNote]
     let onCancel: () -> Void
     let onConfirm: (UIImage, Double) -> Void
 
@@ -44,6 +46,7 @@ struct BackgroundEditor: View {
         data: TimetableData,
         week: Int,
         chromeOpacity: Double,
+        notes: [TimetableNote],
         initialOpacity: Double,
         onCancel: @escaping () -> Void,
         onConfirm: @escaping (UIImage, Double) -> Void
@@ -52,6 +55,7 @@ struct BackgroundEditor: View {
         self.data = data
         self.week = week
         self.chromeOpacity = chromeOpacity
+        self.notes = notes
         self.onCancel = onCancel
         self.onConfirm = onConfirm
         _opacity = State(initialValue: initialOpacity)
@@ -97,7 +101,8 @@ struct BackgroundEditor: View {
                 onTapCourse: { _ in },
                 onTapCollision: { _ in },
                 hasBackground: true,
-                chromeOpacity: chromeOpacity
+                chromeOpacity: chromeOpacity,
+                notes: notes
             )
             .padding(.top, safeTop)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
