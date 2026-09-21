@@ -20,6 +20,10 @@ final class AppViewModel: ObservableObject {
     @Published var week: Int = 1
     /// 课表底图，没设置过为 nil
     @Published var background: UIImage?
+    /// 底图在画面里的可见程度，[1 - 这个值] 就是压在它上面的蒙版浓度
+    @Published var backgroundOpacity: Double = TimetableBackground.defaultOpacity
+    /// 正在编辑的底图，非空时界面会弹出编辑器
+    @Published var backgroundEdit: BackgroundEditSession?
 
     /// 课表查询那边要复用同一份 api 与登录态，所以不设为 private
     let api: CqieApi
@@ -33,6 +37,7 @@ final class AppViewModel: ObservableObject {
             account = saved
         }
         background = TimetableBackground.load()
+        backgroundOpacity = TimetableBackground.opacity
         let cached = TimetableStore.load()
         let restored = auth.restore()
 
@@ -219,16 +224,33 @@ final class AppViewModel: ObservableObject {
 
     // MARK: - 课表底图
 
-    /// 存下底图，失败返回 false。
-    /// 图是压缩后存进沙盒的，不依赖相册里那张原图还在不在
+    /// 选好图先进编辑器摆位置，而不是直接当底图用
+    func beginBackgroundEdit(_ image: UIImage) {
+        backgroundEdit = BackgroundEditSession(image: image)
+    }
+
+    func cancelBackgroundEdit() {
+        backgroundEdit = nil
+    }
+
+    /// 存下编辑好的底图与浓度。失败返回 false
     @discardableResult
-    func setBackground(_ image: UIImage) -> Bool {
+    func applyBackground(_ image: UIImage, opacity: Double) -> Bool {
+        backgroundEdit = nil
         guard TimetableBackground.save(image) else {
-            statusText = "这张图存不下来，换一张试试"
+            statusText = "底图存不下来，换一张试试"
             return false
         }
+        TimetableBackground.opacity = opacity
+        backgroundOpacity = TimetableBackground.opacity
         background = TimetableBackground.load()
         return true
+    }
+
+    /// 已经设过底图时，直接在设置面板里调浓度
+    func setBackgroundOpacity(_ value: Double) {
+        TimetableBackground.opacity = value
+        backgroundOpacity = TimetableBackground.opacity
     }
 
     func clearBackground() {
@@ -246,6 +268,12 @@ final class AppViewModel: ObservableObject {
         statusText = "已导入课表，数据只存在本机"
         Task { await ClassReminder.reschedule(imported) }
     }
+}
+
+/// 编辑器会话。包一层是为了拿到 identity —— `fullScreenCover(item:)` 需要它
+struct BackgroundEditSession: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }
 
 enum AppInfo {

@@ -6,6 +6,7 @@ import UIKit
 ///
 /// 选图用 `PhotosPicker`：它由系统托管，只把用户当次选中的那一张交给 App，
 /// 所以不需要申请相册权限，也看不到相册里的其他内容。
+/// 选完会先进编辑器摆位置，确认了才当底图用。
 struct BackgroundSheet: View {
 
     @ObservedObject var model: AppViewModel
@@ -33,7 +34,27 @@ struct BackgroundSheet: View {
                         }
                     }
                 } footer: {
-                    Text("选一张图当课表的底。上面会盖一层淡色蒙版，课程块的底色完全不受影响，底图再花也不会把课压得看不清。")
+                    Text("选一张图当课表的底，选完可以拖动、双指缩放和旋转来摆放。上面会盖一层淡色蒙版，课程块的底色完全不受影响，底图再花也不会把课压得看不清。")
+                }
+
+                if model.background != nil {
+                    Section {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("底图不透明度 \(Int((model.backgroundOpacity * 100).rounded()))%")
+                                .font(.caption)
+                            Slider(
+                                value: Binding(
+                                    get: { model.backgroundOpacity },
+                                    set: { model.setBackgroundOpacity($0) }
+                                ),
+                                in: TimetableBackground.minOpacity...TimetableBackground.maxOpacity
+                            )
+                        }
+                    } header: {
+                        Text("浓度")
+                    } footer: {
+                        Text("调高底图更清楚，但课表的节次、日期这些细字也越难读。")
+                    }
                 }
 
                 if failed {
@@ -55,16 +76,18 @@ struct BackgroundSheet: View {
         .presentationDetents([.medium, .large])
         .onChange(of: picked) { item in
             guard let item else { return }
-            Task { await apply(item) }
+            Task { await load(item) }
         }
     }
 
-    private func apply(_ item: PhotosPickerItem) async {
+    private func load(_ item: PhotosPickerItem) async {
         guard let data = try? await item.loadTransferable(type: Data.self),
               let image = UIImage(data: data) else {
             failed = true
             return
         }
-        failed = !model.setBackground(image)
+        failed = false
+        // 先进编辑器摆好位置和浓度，确认了才当底图用
+        model.beginBackgroundEdit(image)
     }
 }

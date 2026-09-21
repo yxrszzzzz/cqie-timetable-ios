@@ -6,16 +6,31 @@ import UIKit
 /// 相册里删掉原图或者在系统里关掉「照片」权限，那时候底图会变成一片空白，
 /// 而且完全看不出为什么。
 ///
-/// 另外底图只是「底」：上面会压一层系统背景色的蒙版（见 [scrimOpacity]）。
+/// 另外底图只是「底」：上面会压一层系统背景色的蒙版（浓度 = 1 - [opacity]）。
 /// 课程块本身是不透明的实色，不受影响；这层保的是节次、日期、表头这些细字。
 enum TimetableBackground {
 
-    /// 铺在底图之上的背景色不透明度。
-    ///
-    /// 这个值直接决定「课还能不能看清」：底图最暗是纯黑时，浅色外观下底约 #CCCCCC；
-    /// 最亮是纯白时，深色外观下约 #333333。两种极端下正文与次要文字都有足够对比度。
-    /// 调低会让底图更清楚，但也更容易把节次、日期这些细字压掉。
-    static let scrimOpacity: Double = 0.80
+    /// 底图在最终画面里的可见程度。[1 - 这个值] 就是压在它上面的蒙版浓度
+    static let defaultOpacity: Double = 0.20
+
+    /// 再低就等于没设底图；再高课表那些细字就要被压掉了
+    static let minOpacity: Double = 0.05
+    static let maxOpacity: Double = 0.60
+
+    private static let opacityKey = "cqie_background_opacity"
+
+    static var opacity: Double {
+        get {
+            let stored = UserDefaults.standard.object(forKey: opacityKey) as? Double
+            return min(max(stored ?? defaultOpacity, minOpacity), maxOpacity)
+        }
+        set {
+            UserDefaults.standard.set(
+                min(max(newValue, minOpacity), maxOpacity),
+                forKey: opacityKey
+            )
+        }
+    }
 
     /// 压缩后的最长边。课表最多铺满一块屏幕，原图那几 MB 存着没意义
     private static let maxEdge: CGFloat = 1600

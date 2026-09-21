@@ -72,6 +72,16 @@ struct ContentView: View {
                 }
             }
         }
+        .fullScreenCover(item: $model.backgroundEdit) { session in
+            BackgroundEditor(
+                source: session.image,
+                initialOpacity: model.backgroundOpacity,
+                onCancel: { model.cancelBackgroundEdit() },
+                onConfirm: { image, opacity in
+                    _ = model.applyBackground(image, opacity: opacity)
+                }
+            )
+        }
         .onChange(of: scenePhase) { phase in
             // 提醒只排未来一周，回到前台时把窗口往前续一次
             guard phase == .active, let data = model.data else { return }

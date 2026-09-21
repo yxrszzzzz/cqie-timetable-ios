@@ -104,6 +104,7 @@ struct TimetableGrid: View {
     let onTapCourse: (Course) -> Void
     let onTapCollision: ([Course]) -> Void
     var background: UIImage?
+    var backgroundOpacity: Double = TimetableBackground.defaultOpacity
 
     private static let dayNames = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
     private static let gutterWidth: CGFloat = 38
@@ -118,7 +119,7 @@ struct TimetableGrid: View {
                     .clipped()
                 // 蒙一层系统背景色。课程块是不透明的实色、不受影响；
                 // 这一层保的是节次、日期、表头这些细字，底图再花也得读得清。
-                Color(.systemBackground).opacity(TimetableBackground.scrimOpacity)
+                Color(.systemBackground).opacity(1 - backgroundOpacity)
             }
 
             VStack(spacing: 0) {
