@@ -27,6 +27,13 @@ struct BackgroundEditor: View {
 
     @State private var opacity: Double
 
+    /// 取景框尺寸。
+    ///
+    /// 必须缓存下来，不能让手势依赖 `proxy.size`：拖动时每次 `@State` 变化都会让 body
+    /// 重算，拿新的 size 重新构造手势，系统会把它当成另一个手势、把当前这次识别掐掉。
+    /// 表现出来就是拖着拖着突然再也拖不动了。
+    @State private var frameSize: CGSize = .zero
+
     init(
         source: UIImage,
         data: TimetableData,
@@ -52,6 +59,8 @@ struct BackgroundEditor: View {
                 canvas(size: proxy.size, safeTop: proxy.safeAreaInsets.top)
                 bottomBar(size: proxy.size)
             }
+            .onAppear { frameSize = proxy.size }
+            .onChange(of: proxy.size) { frameSize = $0 }
         }
         .ignoresSafeArea()
     }
@@ -96,7 +105,11 @@ struct BackgroundEditor: View {
         .frame(width: size.width, height: size.height)
         .clipped()
         .contentShape(Rectangle())
-        .gesture(combinedGesture(size: size))
+        // 三条手势摊平并列，不要嵌套 SimultaneousGesture——嵌套写法在连续操作时
+        // 很容易丢掉某一支，表现就是拖着拖着不动了
+        .gesture(dragGesture)
+        .simultaneousGesture(magnifyGesture)
+        .simultaneousGesture(rotateGesture)
     }
 
     /// 描出底图实际占的位置。算法和 `bake` 是同一套，所以描出来的框就是存下来之后
@@ -138,41 +151,43 @@ struct BackgroundEditor: View {
         .allowsHitTesting(false)
     }
 
-    private func combinedGesture(size: CGSize) -> some Gesture {
-        SimultaneousGesture(
-            SimultaneousGesture(
-                MagnificationGesture()
-                    .onChanged { value in
-                        scale = min(max(settledScale * value, 0.3), 6)
-                    }
-                    .onEnded { _ in settledScale = scale },
-                RotationGesture()
-                    .onChanged { value in rotation = settledRotation + value }
-                    .onEnded { _ in settledRotation = rotation }
-            ),
-            // 位移要限个范围。两指旋转时 DragGesture 也在跟第一根手指的位移，
-            // 边转边移很容易把图甩到屏幕外面去，看着就像「图片不见了」
-            DragGesture()
-                .onChanged { value in
-                    offset = CGSize(
-                        width: clamp(
-                            settledOffset.width + value.translation.width,
-                            -size.width / 2,
-                            size.width / 2
-                        ),
-                        height: clamp(
-                            settledOffset.height + value.translation.height,
-                            -size.height / 2,
-                            size.height / 2
-                        )
-                    )
-                }
-                .onEnded { _ in settledOffset = offset }
-        )
+    private var magnifyGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                scale = min(max(settledScale * value, 0.3), 6)
+            }
+            .onEnded { _ in settledScale = scale }
     }
 
-    private func clamp(_ value: CGFloat, _ lower: CGFloat, _ upper: CGFloat) -> CGFloat {
-        min(max(value, lower), upper)
+    private var rotateGesture: some Gesture {
+        RotationGesture()
+            .onChanged { value in rotation = settledRotation + value }
+            .onEnded { _ in settledRotation = rotation }
+    }
+
+    /// 位移要限个范围。两指旋转时这个手势也在跟第一根手指的位移，
+    /// 边转边移很容易把图甩到屏幕外面去，看着就像「图片不见了」
+    private var dragGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                offset = CGSize(
+                    width: clamp(
+                        settledOffset.width + value.translation.width,
+                        frameSize.width / 2
+                    ),
+                    height: clamp(
+                        settledOffset.height + value.translation.height,
+                        frameSize.height / 2
+                    )
+                )
+            }
+            .onEnded { _ in settledOffset = offset }
+    }
+
+    /// `limit <= 0`（尺寸还没量出来）时不限制
+    private func clamp(_ value: CGFloat, _ limit: CGFloat) -> CGFloat {
+        guard limit > 0 else { return value }
+        return min(max(value, -limit), limit)
     }
 
     // MARK: - 控制条（半透明，压在预览之下）
