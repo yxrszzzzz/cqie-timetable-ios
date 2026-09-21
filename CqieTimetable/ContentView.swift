@@ -31,6 +31,20 @@ struct ContentView: View {
                 }
                 .padding()
             }
+            // 底图铺在整页之上，而不是塞进网格里——网格高度 = 节次数 × 行高，
+            // 不同周需要显示的节次数不一样，塞进去的话切周次时背景会跟着伸缩
+            .background {
+                if let background = model.background {
+                    Image(uiImage: background)
+                        .resizable()
+                        .scaledToFill()
+                        .clipped()
+                        .overlay(
+                            Color(.systemBackground).opacity(1 - model.backgroundOpacity)
+                        )
+                        .ignoresSafeArea()
+                }
+            }
             .navigationTitle("重工课表")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -73,14 +87,21 @@ struct ContentView: View {
             }
         }
         .fullScreenCover(item: $model.backgroundEdit) { session in
-            BackgroundEditor(
-                source: session.image,
-                initialOpacity: model.backgroundOpacity,
-                onCancel: { model.cancelBackgroundEdit() },
-                onConfirm: { image, opacity in
-                    _ = model.applyBackground(image, opacity: opacity)
-                }
-            )
+            if let data = model.data {
+                BackgroundEditor(
+                    source: session.image,
+                    data: data,
+                    week: model.week,
+                    initialOpacity: model.backgroundOpacity,
+                    onCancel: { model.cancelBackgroundEdit() },
+                    onConfirm: { image, opacity in
+                        _ = model.applyBackground(image, opacity: opacity)
+                    }
+                )
+            } else {
+                // 没有课表就没有示意层可叠，给个空页兜底（正常走不到）
+                Color(.systemBackground).ignoresSafeArea()
+            }
         }
         .onChange(of: scenePhase) { phase in
             // 提醒只排未来一周，回到前台时把窗口往前续一次

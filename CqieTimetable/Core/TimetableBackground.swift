@@ -13,9 +13,12 @@ enum TimetableBackground {
     /// 底图在最终画面里的可见程度。[1 - 这个值] 就是压在它上面的蒙版浓度
     static let defaultOpacity: Double = 0.20
 
-    /// 再低就等于没设底图；再高课表那些细字就要被压掉了
+    /// 最低也要留一点，否则等于没设底图
     static let minOpacity: Double = 0.05
-    static let maxOpacity: Double = 0.60
+
+    /// 允许调到完全可见。课程块本身是不透明的实色，节次栏和表头又各留了一层底，
+    /// 所以调到满也还读得出课表
+    static let maxOpacity: Double = 1.00
 
     private static let opacityKey = "cqie_background_opacity"
 

@@ -97,44 +97,35 @@ struct CollisionBlock: View {
     }
 }
 
+/// 节次栏和表头在底图之上的背景色浓度。这两块放的是「第几节」「周几」「几号」
+/// 这类定位信息，底图再花也得让它们读得出来，所以不跟着用户的不透明度走，始终留一层。
+private let gutterScrim: Double = 0.72
+
 struct TimetableGrid: View {
 
     let data: TimetableData
     let week: Int
     let onTapCourse: (Course) -> Void
     let onTapCollision: ([Course]) -> Void
-    var background: UIImage?
-    var backgroundOpacity: Double = TimetableBackground.defaultOpacity
+    var hasBackground = false
 
     private static let dayNames = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
     private static let gutterWidth: CGFloat = 38
     private static let rowHeight: CGFloat = 56
 
     var body: some View {
-        ZStack {
-            if let background {
-                Image(uiImage: background)
-                    .resizable()
-                    .scaledToFill()
-                    .clipped()
-                // 蒙一层系统背景色。课程块是不透明的实色、不受影响；
-                // 这一层保的是节次、日期、表头这些细字，底图再花也得读得清。
-                Color(.systemBackground).opacity(1 - backgroundOpacity)
-            }
-
-            VStack(spacing: 0) {
-                headerView
-                Divider()
-                ForEach(1...data.visibleSectionCount, id: \.self) { section in
-                    HStack(spacing: 0) {
-                        gutter(section)
-                        ForEach(1...7, id: \.self) { day in
-                            cell(day: day, section: section)
-                        }
+        VStack(spacing: 0) {
+            headerView
+            Divider()
+            ForEach(1...data.visibleSectionCount, id: \.self) { section in
+                HStack(spacing: 0) {
+                    gutter(section)
+                    ForEach(1...7, id: \.self) { day in
+                        cell(day: day, section: section)
                     }
-                    .frame(height: Self.rowHeight)
-                    Divider()
                 }
+                .frame(height: Self.rowHeight)
+                Divider()
             }
         }
     }
@@ -164,8 +155,8 @@ struct TimetableGrid: View {
             }
         }
         .padding(.vertical, 6)
-        // 有底图时改半透明：叠在蒙版之上比网格区更实一点，滚动时也挡得住
-        .background(Color(.systemBackground).opacity(background == nil ? 1 : 0.6))
+        // 有底图时改半透明：底图透得出来，文字也还压得住
+        .background(Color(.systemBackground).opacity(hasBackground ? gutterScrim : 1))
     }
 
     private func gutter(_ section: Int) -> some View {
@@ -181,6 +172,9 @@ struct TimetableGrid: View {
             }
         }
         .frame(width: Self.gutterWidth)
+        // 节次栏也留一层底。底图调到接近全屏可见时整屏都是图，
+        // 没这层的话「第几节」和上课时间会糊在背景里读不出来
+        .background(Color(.systemBackground).opacity(hasBackground ? gutterScrim : 1))
     }
 
     private func cell(day: Int, section: Int) -> some View {

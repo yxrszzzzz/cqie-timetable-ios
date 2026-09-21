@@ -8,6 +8,9 @@ import UIKit
 struct BackgroundEditor: View {
 
     let source: UIImage
+    /// 叠在底图上的课表示意要用它
+    let data: TimetableData
+    let week: Int
     let onCancel: () -> Void
     let onConfirm: (UIImage, Double) -> Void
 
@@ -24,11 +27,15 @@ struct BackgroundEditor: View {
 
     init(
         source: UIImage,
+        data: TimetableData,
+        week: Int,
         initialOpacity: Double,
         onCancel: @escaping () -> Void,
         onConfirm: @escaping (UIImage, Double) -> Void
     ) {
         self.source = source
+        self.data = data
+        self.week = week
         self.onCancel = onCancel
         self.onConfirm = onConfirm
         _opacity = State(initialValue: initialOpacity)
@@ -66,6 +73,14 @@ struct BackgroundEditor: View {
                 .scaleEffect(scale)
                 .rotationEffect(rotation)
                 .offset(offset)
+
+            // 虚化的课表示意：一眼看出课程块会落在图片的哪一块，
+            // 又不至于把底图本身挡住。手势要留给底下那层，所以关掉命中。
+            TimetableSketch(data: data, week: week)
+                .frame(width: size.width, height: size.height)
+                .blur(radius: 6)
+                .opacity(0.55)
+                .allowsHitTesting(false)
         }
         .frame(width: size.width, height: size.height)
         .clipped()
@@ -100,8 +115,18 @@ struct BackgroundEditor: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Text("旋转").font(.caption)
-                Button("-90°") { turn(by: -90) }
-                Button("+90°") { turn(by: 90) }
+                Button {
+                    turn(by: -90)
+                } label: {
+                    Image(systemName: "rotate.left")
+                }
+                .accessibilityLabel("向左转 90°")
+                Button {
+                    turn(by: 90)
+                } label: {
+                    Image(systemName: "rotate.right")
+                }
+                .accessibilityLabel("向右转 90°")
                 Spacer()
                 Button("复位") { reset() }
             }
@@ -195,5 +220,44 @@ private func bake(
         cg.translateBy(x: -frame.width / 2, y: -frame.height / 2)
 
         source.draw(in: rect)
+    }
+}
+
+/// 课表的粗略示意：只画节次栏和课程色块，不画文字。
+/// 夹在底图和用户之间做参考，所以刻意做得很淡。
+private struct TimetableSketch: View {
+
+    let data: TimetableData
+    let week: Int
+
+    private let gutterWidth: CGFloat = 38
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(1...max(data.visibleSectionCount, 1), id: \.self) { section in
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: gutterWidth)
+                    ForEach(1...7, id: \.self) { day in
+                        cell(day: day, section: section)
+                    }
+                }
+                .frame(maxHeight: .infinity)
+            }
+        }
+    }
+
+    private func cell(day: Int, section: Int) -> some View {
+        let courses = data.coursesAt(week: week, weekDay: day, section: section)
+        return ZStack {
+            if let first = courses.first {
+                RoundedRectangle(cornerRadius: 4).fill(color(for: first.name))
+            }
+        }
+        .padding(1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func color(for name: String) -> Color {
+        Color(hue: CoursePalette.hue(for: name), saturation: 0.45, brightness: 0.85)
     }
 }
