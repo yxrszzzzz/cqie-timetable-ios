@@ -22,7 +22,8 @@ struct TimetableScreen: View {
                     week: model.week,
                     onTapCourse: { detail = $0 },
                     onTapCollision: { collision = CollisionPayload(courses: $0) },
-                    hasBackground: model.background != nil
+                    hasBackground: model.background != nil,
+                    chromeOpacity: model.chromeOpacity
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 extraCourses(data)
@@ -68,6 +69,13 @@ struct TimetableScreen: View {
                 .padding(.horizontal, 1)
             }
         }
+        // 周次行也留一层底，浓度和表头、节次栏走同一个设置
+        .padding(.horizontal, model.background == nil ? 0 : 12)
+        .padding(.vertical, model.background == nil ? 0 : 4)
+        .background(
+            Color(.systemBackground)
+                .opacity(model.background == nil ? 0 : model.chromeOpacity)
+        )
     }
 
     private func chipBackground(_ value: Int, current: Int) -> Color {

@@ -97,10 +97,6 @@ struct CollisionBlock: View {
     }
 }
 
-/// 节次栏和表头在底图之上的背景色浓度。这两块放的是「第几节」「周几」「几号」
-/// 这类定位信息，底图再花也得让它们读得出来，所以不跟着用户的不透明度走，始终留一层。
-private let gutterScrim: Double = 0.72
-
 struct TimetableGrid: View {
 
     let data: TimetableData
@@ -108,6 +104,7 @@ struct TimetableGrid: View {
     let onTapCourse: (Course) -> Void
     let onTapCollision: ([Course]) -> Void
     var hasBackground = false
+    var chromeOpacity: Double = TimetableBackground.defaultChromeOpacity
 
     private static let dayNames = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
     private static let gutterWidth: CGFloat = 38
@@ -155,8 +152,8 @@ struct TimetableGrid: View {
             }
         }
         .padding(.vertical, 6)
-        // 有底图时改半透明：底图透得出来，文字也还压得住
-        .background(Color(.systemBackground).opacity(hasBackground ? gutterScrim : 1))
+        // 有底图时底衬浓度可调：调薄底图更清楚，调厚周几、日期更清楚
+        .background(Color(.systemBackground).opacity(hasBackground ? chromeOpacity : 1))
     }
 
     private func gutter(_ section: Int) -> some View {
@@ -174,7 +171,7 @@ struct TimetableGrid: View {
         .frame(width: Self.gutterWidth)
         // 节次栏也留一层底。底图调到接近全屏可见时整屏都是图，
         // 没这层的话「第几节」和上课时间会糊在背景里读不出来
-        .background(Color(.systemBackground).opacity(hasBackground ? gutterScrim : 1))
+        .background(Color(.systemBackground).opacity(hasBackground ? chromeOpacity : 1))
     }
 
     private func cell(day: Int, section: Int) -> some View {

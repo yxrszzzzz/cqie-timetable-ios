@@ -20,7 +20,15 @@ enum TimetableBackground {
     /// 所以调到满也还读得出课表
     static let maxOpacity: Double = 1.00
 
+    /// 表头（周一周二…）、周次行和节次栏（123…）这几处的底衬浓度。
+    /// 它们放的是定位信息，底色始终留一层；这个值控制留多厚——调薄底图更清楚，
+    /// 调厚则课表框架更清楚。
+    static let defaultChromeOpacity: Double = 0.72
+    static let minChromeOpacity: Double = 0.00
+    static let maxChromeOpacity: Double = 1.00
+
     private static let opacityKey = "cqie_background_opacity"
+    private static let chromeKey = "cqie_background_chrome"
 
     static var opacity: Double {
         get {
@@ -31,6 +39,19 @@ enum TimetableBackground {
             UserDefaults.standard.set(
                 min(max(newValue, minOpacity), maxOpacity),
                 forKey: opacityKey
+            )
+        }
+    }
+
+    static var chromeOpacity: Double {
+        get {
+            let stored = UserDefaults.standard.object(forKey: chromeKey) as? Double
+            return min(max(stored ?? defaultChromeOpacity, minChromeOpacity), maxChromeOpacity)
+        }
+        set {
+            UserDefaults.standard.set(
+                min(max(newValue, minChromeOpacity), maxChromeOpacity),
+                forKey: chromeKey
             )
         }
     }

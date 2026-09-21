@@ -34,26 +34,36 @@ struct BackgroundSheet: View {
                         }
                     }
                 } footer: {
-                    Text("选一张图当课表的底，选完可以拖动、双指缩放和旋转来摆放。上面会盖一层淡色蒙版，课程块的底色完全不受影响，底图再花也不会把课压得看不清。")
+                    Text("选一张图当课表的底，选完可以拖动、双指缩放和旋转来摆放，预览就是首页的样子。")
                 }
 
                 if model.background != nil {
                     Section {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("底图不透明度 \(Int((model.backgroundOpacity * 100).rounded()))%")
-                                .font(.caption)
-                            Slider(
-                                value: Binding(
-                                    get: { model.backgroundOpacity },
-                                    set: { model.setBackgroundOpacity($0) }
-                                ),
-                                in: TimetableBackground.minOpacity...TimetableBackground.maxOpacity
-                            )
-                        }
+                        slider(
+                            label: "底图不透明度",
+                            value: Binding(
+                                get: { model.backgroundOpacity },
+                                set: { model.setBackgroundOpacity($0) }
+                            ),
+                            range: TimetableBackground.minOpacity...TimetableBackground.maxOpacity
+                        )
                     } header: {
                         Text("浓度")
                     } footer: {
-                        Text("调高底图更清楚。课程块的底色完全不受影响，节次栏和表头也另留了一层底，所以调到 100% 也还读得出课表。")
+                        Text("调高底图更清楚。课程块的底色完全不受影响，调到 100% 也还读得出课表。")
+                    }
+
+                    Section {
+                        slider(
+                            label: "定位栏底衬",
+                            value: Binding(
+                                get: { model.chromeOpacity },
+                                set: { model.setChromeOpacity($0) }
+                            ),
+                            range: TimetableBackground.minChromeOpacity...TimetableBackground.maxChromeOpacity
+                        )
+                    } footer: {
+                        Text("周次行、周一周二、节次栏这些定位信息底下垫的那层底色。调薄底图更清楚，调厚则课表的框架更清楚。")
                     }
                 }
 
@@ -77,6 +87,18 @@ struct BackgroundSheet: View {
         .onChange(of: picked) { item in
             guard let item else { return }
             Task { await load(item) }
+        }
+    }
+
+    private func slider(
+        label: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(label) \(Int((value.wrappedValue * 100).rounded()))%")
+                .font(.caption)
+            Slider(value: value, in: range)
         }
     }
 

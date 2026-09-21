@@ -22,6 +22,8 @@ final class AppViewModel: ObservableObject {
     @Published var background: UIImage?
     /// 底图在画面里的可见程度，[1 - 这个值] 就是压在它上面的蒙版浓度
     @Published var backgroundOpacity: Double = TimetableBackground.defaultOpacity
+    /// 表头、周次行、节次栏这几处底衬的浓度
+    @Published var chromeOpacity: Double = TimetableBackground.defaultChromeOpacity
     /// 正在编辑的底图，非空时界面会弹出编辑器
     @Published var backgroundEdit: BackgroundEditSession?
 
@@ -38,6 +40,7 @@ final class AppViewModel: ObservableObject {
         }
         background = TimetableBackground.load()
         backgroundOpacity = TimetableBackground.opacity
+        chromeOpacity = TimetableBackground.chromeOpacity
         let cached = TimetableStore.load()
         let restored = auth.restore()
 
@@ -251,6 +254,12 @@ final class AppViewModel: ObservableObject {
     func setBackgroundOpacity(_ value: Double) {
         TimetableBackground.opacity = value
         backgroundOpacity = TimetableBackground.opacity
+    }
+
+    /// 表头、周次行、节次栏这几处底衬的浓度
+    func setChromeOpacity(_ value: Double) {
+        TimetableBackground.chromeOpacity = value
+        chromeOpacity = TimetableBackground.chromeOpacity
     }
 
     func clearBackground() {
