@@ -48,13 +48,9 @@ struct BackgroundEditor: View {
     var body: some View {
         // 取景框尺寸既用来预览、也用来烘焙，必须是同一个值
         GeometryReader { proxy in
-            ZStack {
+            ZStack(alignment: .bottom) {
                 canvas(size: proxy.size)
-                VStack {
-                    topBar(size: proxy.size)
-                    Spacer()
-                    bottomBar
-                }
+                bottomBar(size: proxy.size)
             }
         }
         .ignoresSafeArea()
@@ -160,28 +156,16 @@ struct BackgroundEditor: View {
         )
     }
 
-    // MARK: - 控制条（半透明，压在预览之上）
+    // MARK: - 控制条（半透明，压在预览之下）
 
+    /// 半透明是有意的：底下的画面要一直看得见。
+    /// 所有控件都压在底部——顶部坚决不放东西，表头「周一周二」就在最上面，
+    /// 给它压一条横栏上去会直接挡住，摆位置时没法对齐
     private var barColor: Color {
         Color(.systemBackground).opacity(0.92)
     }
 
-    private func topBar(size: CGSize) -> some View {
-        HStack {
-            Button("取消", action: onCancel)
-            Spacer()
-            Text("拖动摆放底图")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Button("确定") { confirm(size: size) }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(barColor)
-    }
-
-    private var bottomBar: some View {
+    private func bottomBar(size: CGSize) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Text("旋转").font(.caption)
@@ -209,6 +193,17 @@ struct BackgroundEditor: View {
                 value: $opacity,
                 in: TimetableBackground.minOpacity...TimetableBackground.maxOpacity
             )
+
+            HStack {
+                Text("单指拖动摆放")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("取消", action: onCancel)
+                Button("确定") { confirm(size: size) }
+                    .fontWeight(.semibold)
+            }
+            .font(.caption)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
